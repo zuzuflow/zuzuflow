@@ -1,0 +1,575 @@
+// =============================================================================
+// Prisma Schema — ZuzuFlow
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// Enums
+// -----------------------------------------------------------------------------
+
+enum WorkflowStatus {
+  draft
+  active
+  inactive
+  archived
+}
+
+enum ExecutionStatus {
+  pending
+  running
+  completed
+  failed
+  cancelled
+  timed_out
+}
+
+enum LogLevel {
+  debug
+  info
+  warn
+  error
+}
+
+enum HttpMethod {
+  GET
+  POST
+  PUT
+  PATCH
+  DELETE
+}
+
+// -----------------------------------------------------------------------------
+// Organization — top-level tenant isolation
+// -----------------------------------------------------------------------------
+
+model Organization {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  address     String?             // org address / billing address
+  status      String    @default("active") // "active" | "suspended" | "deleted"
+  suspendedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  members      OrgMember[]
+  environments Environment[]
+  orgPlan      OrgPlan?
+
+  @@map("organizations")
+}
+
+// -----------------------------------------------------------------------------
+// OrgMember — which users belong to which organizations
+// -----------------------------------------------------------------------------
+
+model OrgMember {
+  id             String   @id @default(uuid())
+  userId         String
+  organizationId String
+  role           String   @default("member") // "owner" | "admin" | "member"
+  createdAt      DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+  @@map("org_members")
+}
+
+// -----------------------------------------------------------------------------
+// Environment — isolation boundary for workflows, credentials, variables
+// Belongs to an Organization; slug is unique within each org.
+// -----------------------------------------------------------------------------
+
+model Environment {
+  id             String  @id @default(uuid())
+  name           String                // "Production", "Staging", "Development"
+  slug           String                // "production", "staging", "dev"
+  isDefault      Boolean @default(false)
+  organizationId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members          UserEnvironment[]
+  workflows        Workflow[]
+  folders          Folder[]
+  credentials      StoredCredential[]
+  variables        Variable[]
+  executions       Execution[]
+  webhookEndpoints WebhookEndpoint[]
+  tags             Tag[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@map("environments")
+}
+
+// -----------------------------------------------------------------------------
+// UserEnvironment — join table: which users belong to which environments
+// -----------------------------------------------------------------------------
+
+model UserEnvironment {
+  id            String @id @default(uuid())
+  userId        String
+  environmentId String
+  role          String @default("editor") // "admin" | "editor" | "viewer"
+
+  createdAt DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  environment Environment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, environmentId])
+  @@index([userId])
+  @@index([environmentId])
+  @@map("user_environments")
+}
+
+// -----------------------------------------------------------------------------
+// Folder — organises workflows in a tree hierarchy
+// -----------------------------------------------------------------------------
+
+model Folder {
+  id       String  @id @default(uuid())
+  name     String
+  parentId String?
+
+  /// Environment this folder belongs to
+  environmentId String
+
+  parent   Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Folder[] @relation("FolderTree")
+
+  workflows   Workflow[]
+  environment Environment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([environmentId])
+  @@map("folders")
+}
+
+// -----------------------------------------------------------------------------
+// Workflow — stores the graph template as JSON
+// -----------------------------------------------------------------------------
+
+model Workflow {
+  id          String         @id @default(uuid())
+  /// Stable, export/import-safe identifier (e.g. "wf_a7b3k2m9pq"). Preserved
+  /// across export/import; unique per environment. SDK callers trigger by this
+  /// key so their code keeps working when a workflow is promoted dev → prod.
+  key         String
+  name        String
+  description String?
+  status      WorkflowStatus @default(draft)
+  /// WorkflowTemplate JSON (nodes + edges)
+  template    Json
+  /// Version counter, incremented on each update
+  version     Int            @default(1)
+  /// Optional folder for organisation
+  folderId    String?
+  /// When true, this workflow is a reusable subworkflow callable from other workflows
+  isSubworkflow Boolean      @default(false)
+
+  /// Environment this workflow belongs to
+  environmentId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  folder           Folder?          @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  environment      Environment      @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+  executions       Execution[]
+  webhookEndpoints WebhookEndpoint[]
+  tags             WorkflowTag[]
+
+  @@unique([environmentId, key])
+  @@index([folderId])
+  @@index([environmentId])
+  @@map("workflows")
+}
+
+// -----------------------------------------------------------------------------
+// Tag — environment-scoped label that can be applied to workflows
+// -----------------------------------------------------------------------------
+
+model Tag {
+  id            String   @id @default(uuid())
+  /// Normalized lowercase slug (e.g. "production", "customer-onboarding")
+  name          String
+  /// Optional UI colour hex (#RRGGBB); null = derive from hash client-side
+  color         String?
+  environmentId String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  environment Environment   @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+  workflows   WorkflowTag[]
+
+  @@unique([environmentId, name])
+  @@index([environmentId])
+  @@map("tags")
+}
+
+// -----------------------------------------------------------------------------
+// WorkflowTag — join table between Workflow and Tag
+// -----------------------------------------------------------------------------
+
+model WorkflowTag {
+  workflowId String
+  tagId      String
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  tag      Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([workflowId, tagId])
+  @@index([tagId])
+  @@map("workflow_tags")
+}
+
+// -----------------------------------------------------------------------------
+// Setting — generic key-value store (git config, etc.)
+// -----------------------------------------------------------------------------
+
+model Setting {
+  key       String   @id
+  /// JSON-encoded value; secrets encrypted with AES-256-GCM
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+// -----------------------------------------------------------------------------
+// User — application users with hashed passwords
+// -----------------------------------------------------------------------------
+
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  email        String    @unique            // required — unique across all users
+  passwordHash String
+  role         String    @default("editor") // "superadmin" | "admin" | "editor" | "disabled" — global role
+  lastLoginAt  DateTime?                    // last successful login timestamp
+  lastLoginIp  String?                      // IP address of last login
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  apiTokens    ApiToken[]
+  environments UserEnvironment[]
+  orgMembers   OrgMember[]
+
+  @@map("users")
+}
+
+// -----------------------------------------------------------------------------
+// ApiToken — long-lived tokens for external integrations (npm package etc.)
+// -----------------------------------------------------------------------------
+
+model ApiToken {
+  id        String    @id @default(uuid())
+  name      String
+  /// SHA-256 hash of the actual token — never stored plain
+  tokenHash String    @unique
+  userId    String
+  lastUsedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("api_tokens")
+}
+
+// -----------------------------------------------------------------------------
+// Execution — one run of a Workflow
+// -----------------------------------------------------------------------------
+
+model Execution {
+  id         String          @id @default(uuid())
+  workflowId String
+  status     ExecutionStatus @default(pending)
+
+  /// Payload that triggered this execution (webhook body, cron context, etc.)
+  triggerPayload Json?
+
+  /// Temporal IDs for correlation and cancellation
+  temporalWorkflowId String?
+  temporalRunId      String?
+
+  /// Final output of the last completed node
+  output Json?
+
+  /// Error message when status = failed
+  error String?
+
+  /// Environment this execution belongs to
+  environmentId String
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workflow    Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  environment Environment   @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+  logs        ExecutionLog[]
+
+  @@index([workflowId])
+  @@index([status])
+  @@index([environmentId])
+  @@map("executions")
+}
+
+// -----------------------------------------------------------------------------
+// ExecutionLog — per-node log entries
+// -----------------------------------------------------------------------------
+
+model ExecutionLog {
+  id          String @id @default(uuid())
+  executionId String
+  nodeId      String
+  nodeKind    String
+  level       LogLevel @default(info)
+  message     String
+  /// Arbitrary JSON blob (input snapshot, output snapshot, error details)
+  data        Json?
+
+  createdAt DateTime @default(now())
+
+  execution Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+  @@index([nodeId])
+  @@map("execution_logs")
+}
+
+// -----------------------------------------------------------------------------
+// WebhookEndpoint — maps inbound URL paths to Workflows
+// -----------------------------------------------------------------------------
+
+model WebhookEndpoint {
+  id         String     @id @default(uuid())
+  workflowId String
+  /// The URL path segment, e.g. "my-webhook"
+  path       String     @unique
+  method     HttpMethod @default(POST)
+
+  /// Authentication type: "none" | "hmac" | "basic" | "jwt"
+  authType   String     @default("none")
+  /// HMAC-SHA256 signing secret (authType=hmac).
+  /// Also populated from legacy top-level secret field for backwards compat.
+  secret     String?
+  /// Basic auth username (authType=basic)
+  basicUsername String?
+  /// Basic auth password (authType=basic)
+  basicPassword String?
+  /// JWT: JWKS URI for key discovery (authType=jwt)
+  jwtJwksUri    String?
+  /// JWT: raw PEM public key when jwksUri is absent (authType=jwt)
+  jwtPublicKey  String?
+  /// JWT: expected iss claim — null = skip check (authType=jwt)
+  jwtIssuer     String?
+  /// JWT: expected aud claim — null = skip check (authType=jwt)
+  jwtAudience   String?
+
+  isActive   Boolean    @default(true)
+
+  /// Environment this webhook belongs to
+  environmentId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workflow    Workflow    @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  environment Environment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@index([environmentId])
+  @@map("webhook_endpoints")
+}
+
+// -----------------------------------------------------------------------------
+// StoredCredential — encrypted secrets (API keys, connection strings, etc.)
+// -----------------------------------------------------------------------------
+
+model StoredCredential {
+  id   String @id @default(uuid())
+  name String
+  /// Credential type tag (smtp, sendgrid, postgres, mqtt, http_basic, api_key, etc.)
+  kind String
+  /// AES-256-GCM encrypted JSON blob containing the actual secret values
+  encryptedData String
+  /// Initialization vector used for encryption (hex)
+  iv            String
+
+  /// Environment this credential belongs to
+  environmentId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  environment Environment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+
+  @@unique([environmentId, name])
+  @@index([environmentId])
+  @@map("stored_credentials")
+}
+
+// -----------------------------------------------------------------------------
+// Variable — environment-scoped key-value pairs, referenced as {{$env.KEY}}
+// Non-secret values stored plain; secret values encrypted with AES-256-GCM.
+// -----------------------------------------------------------------------------
+
+model Variable {
+  id          String  @id @default(uuid())
+  /// Variable key — used as {{$env.KEY}} in node configs
+  key         String
+  /// Plain text value (when isSecret = false) or AES-256-GCM ciphertext (hex)
+  value       String
+  description String?
+  isSecret    Boolean @default(false)
+  /// Initialization vector — only set when isSecret = true
+  iv          String?
+
+  /// Environment this variable belongs to
+  environmentId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  environment Environment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+
+  @@unique([environmentId, key])
+  @@index([environmentId])
+  @@map("variables")
+}
+
+// -----------------------------------------------------------------------------
+// Plan — billing/feature plans (Free, Pro, Enterprise, custom)
+// -----------------------------------------------------------------------------
+
+model Plan {
+  id                 String   @id @default(uuid())
+  name               String   @unique
+  slug               String   @unique
+  description        String?
+  isCustom           Boolean  @default(false)
+
+  // Limits — null = unlimited
+  maxWorkflows       Int?
+  maxExecutionsMonth Int?
+  maxEnvironments    Int?
+  maxTeamMembers     Int?
+  maxStorageMb       Int?
+
+  priceMonthly Int?            // cents
+  priceYearly  Int?            // cents
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orgPlans OrgPlan[]
+
+  @@map("plans")
+}
+
+// -----------------------------------------------------------------------------
+// OrgPlan — assigns a Plan to an Organization with optional per-org overrides
+// -----------------------------------------------------------------------------
+
+model OrgPlan {
+  id             String    @id @default(uuid())
+  organizationId String    @unique // one active plan per org
+  planId         String
+
+  // Per-org overrides — null = use plan defaults
+  overrideMaxWorkflows       Int?
+  overrideMaxExecutionsMonth Int?
+  overrideMaxEnvironments    Int?
+  overrideMaxTeamMembers     Int?
+  overrideMaxStorageMb       Int?
+
+  startsAt  DateTime  @default(now())
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([planId])
+  @@map("org_plans")
+}
+
+// -----------------------------------------------------------------------------
+// AuditLog — tracks super-admin actions for compliance
+// -----------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String
+  action     String                 // e.g. "org.suspend", "user.delete", "plan.assign"
+  targetType String                 // "organization", "user", "plan", "featureFlag", "system"
+  targetId   String?
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// -----------------------------------------------------------------------------
+// FeatureFlag — toggleable feature flags with optional targeting rules
+// -----------------------------------------------------------------------------
+
+model FeatureFlag {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  description String?
+  enabled     Boolean  @default(false)
+  /// Optional JSON: target org IDs, percentage rollout, etc.
+  rules       Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("feature_flags")
+}
+
+// -----------------------------------------------------------------------------
+// UsageSnapshot — pre-aggregated daily usage stats per org
+// -----------------------------------------------------------------------------
+
+model UsageSnapshot {
+  id              String   @id @default(uuid())
+  organizationId  String?              // null = platform-wide aggregate
+  date            DateTime             // truncated to day
+  executionCount  Int      @default(0)
+  errorCount      Int      @default(0)
+  apiRequestCount Int      @default(0)
+  webhookCount    Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@unique([organizationId, date])
+  @@index([date])
+  @@map("usage_snapshots")
+}

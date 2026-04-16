@@ -1,0 +1,138 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: temporal-dynamic-config
+  namespace: workflow
+data:
+  development-sql.yaml: |
+    limit.maxIDLength:
+      - value: 255
+        constraints: {}
+    system.forceSearchAttributesCacheRefreshOnRead:
+      - value: true
+        constraints: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal
+  namespace: workflow
+  labels:
+    app: temporal
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: temporal
+  template:
+    metadata:
+      labels:
+        app: temporal
+    spec:
+      initContainers:
+        # Wait for PostgreSQL to be ready before starting Temporal
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h postgres-svc -p 5432 -U workflow; do
+                echo "Waiting for PostgreSQL..."
+                sleep 2
+              done
+              echo "PostgreSQL is ready!"
+      containers:
+        - name: temporal
+          # Use auto-setup image (has docker.yaml config + tctl) but skip the
+          # entrypoint's 60s health-check loop that kills the container on slow servers.
+          # DB schema is already created; we just need the server to start.
+          image: temporalio/auto-setup:1.24.2
+          # The entrypoint runs: dockerize (generate config) → auto-setup.sh (DB schema)
+          # → start-temporal.sh (start server + health poll with ~60s timeout → exit 1).
+          # We replicate the essential steps but skip the health poll timeout.
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              # Step 1: Set BIND_ON_IP and TEMPORAL_ADDRESS (same as entrypoint.sh)
+              export BIND_ON_IP=$(getent hosts "$(hostname)" | awk '{print $1;}')
+              export TEMPORAL_ADDRESS="${BIND_ON_IP}:7233"
+              export TEMPORAL_CLI_ADDRESS="${TEMPORAL_ADDRESS}"
+
+              # Step 2: Generate docker.yaml config from template (critical)
+              dockerize -template /etc/temporal/config/config_template.yaml:/etc/temporal/config/docker.yaml
+
+              # Step 3: Skip auto-setup.sh — DB schema already at v1.12, namespace exists
+
+              # Step 4: Start Temporal server directly (bypass start-temporal.sh health timeout)
+              exec temporal-server --env docker start \
+                --service frontend \
+                --service history \
+                --service matching \
+                --service worker
+          ports:
+            - containerPort: 7233
+          env:
+            - name: DB
+              value: "postgres12"
+            - name: DB_PORT
+              value: "5432"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: workflow-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: workflow-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_SEEDS
+              value: "postgres-svc"
+            - name: DYNAMIC_CONFIG_FILE_PATH
+              value: "config/dynamicconfig/development-sql.yaml"
+          volumeMounts:
+            - name: dynamic-config
+              mountPath: /etc/temporal/config/dynamicconfig
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+          # Temporal auto-setup runs all 4 services; takes 2-3 min on small servers
+          readinessProbe:
+            tcpSocket:
+              port: 7233
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            tcpSocket:
+              port: 7233
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 10
+      volumes:
+        - name: dynamic-config
+          configMap:
+            name: temporal-dynamic-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal-svc
+  namespace: workflow
+spec:
+  selector:
+    app: temporal
+  ports:
+    - port: 7233
+      targetPort: 7233
+  type: ClusterIP

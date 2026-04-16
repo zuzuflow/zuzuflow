@@ -1,0 +1,57 @@
+# =============================================================================
+# ZuzuFlow Backend — Express API + Prisma + Temporal Client
+# =============================================================================
+FROM node:24-slim
+
+RUN apt-get update && apt-get install -y openssl wget && rm -rf /var/lib/apt/lists/*
+
+RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
+
+WORKDIR /app
+
+# Copy root workspace config
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json ./
+
+# Copy ALL workspace package.json stubs (pnpm lockfile references all of them)
+COPY apps/backend/package.json apps/backend/package.json
+COPY apps/frontend/package.json apps/frontend/package.json
+COPY apps/workers/package.json apps/workers/package.json
+COPY packages/shared/package.json packages/shared/package.json
+COPY sdk/nodejs-sdk/package.json sdk/nodejs-sdk/package.json
+COPY sdk/react-sdk/package.json sdk/react-sdk/package.json
+
+# Install deps — skip ALL postinstall scripts (avoids isolated-vm native build)
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+# Copy actual source for backend + shared dependency
+COPY packages/shared/ packages/shared/
+COPY apps/backend/ apps/backend/
+
+# Generate Prisma client using workspace-installed prisma CLI (not npx).
+# pnpm exec resolves paths correctly through pnpm's symlink structure.
+# prisma generate auto-downloads engine binaries when missing.
+RUN cd apps/backend && pnpm exec prisma generate --schema=src/db/prisma/schema.prisma
+
+# Ensure .prisma/client is resolvable from root node_modules too (pnpm resolution)
+RUN mkdir -p node_modules/.prisma && \
+    cp -r /app/apps/backend/node_modules/.prisma/client node_modules/.prisma/client 2>/dev/null || true
+
+# Build shared first, then patch exports to point to compiled dist/ output
+RUN pnpm --filter @workflow/shared build
+RUN cd packages/shared && node -e "\
+  const pkg = require('./package.json'); \
+  pkg.main = './dist/index.js'; \
+  pkg.types = './dist/index.d.ts'; \
+  pkg.exports = { '.': './dist/index.js' }; \
+  require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');"
+
+# Build backend
+RUN pnpm --filter backend build
+
+ENV NODE_ENV=production
+EXPOSE 3001
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD wget --spider http://localhost:3001/health || exit 1
+
+CMD ["node", "apps/backend/dist/index.js"]

@@ -1,0 +1,107 @@
+pipeline {
+    agent any
+
+    environment {
+        REGISTRY = 'localhost:5000'
+        NAMESPACE = 'workflow'
+    }
+
+    triggers {
+        githubPush()
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build Docker Images') {
+            parallel {
+                stage('Build Frontend') {
+                    steps {
+                        sh "docker build -f deploy/dockerfiles/Dockerfile.frontend -t ${REGISTRY}/workflow-frontend:${BUILD_NUMBER} -t ${REGISTRY}/workflow-frontend:latest ."
+                    }
+                }
+                stage('Build Backend') {
+                    steps {
+                        sh "docker build -f deploy/dockerfiles/Dockerfile.backend -t ${REGISTRY}/workflow-backend:${BUILD_NUMBER} -t ${REGISTRY}/workflow-backend:latest ."
+                    }
+                }
+                stage('Build Workers') {
+                    steps {
+                        sh "docker build -f deploy/dockerfiles/Dockerfile.workers -t ${REGISTRY}/workflow-workers:${BUILD_NUMBER} -t ${REGISTRY}/workflow-workers:latest ."
+                    }
+                }
+            }
+        }
+
+        stage('Push to Registry') {
+            steps {
+                sh """
+                    docker push ${REGISTRY}/workflow-frontend:${BUILD_NUMBER}
+                    docker push ${REGISTRY}/workflow-frontend:latest
+                    docker push ${REGISTRY}/workflow-backend:${BUILD_NUMBER}
+                    docker push ${REGISTRY}/workflow-backend:latest
+                    docker push ${REGISTRY}/workflow-workers:${BUILD_NUMBER}
+                    docker push ${REGISTRY}/workflow-workers:latest
+                """
+            }
+        }
+
+        stage('Run Database Migrations') {
+            steps {
+                sh """
+                    kubectl delete job workflow-migration -n ${NAMESPACE} --ignore-not-found=true
+                    # Update migration job image tag
+                    sed 's|localhost:5000/workflow-backend:latest|${REGISTRY}/workflow-backend:${BUILD_NUMBER}|g' deploy/k8s/migration-job.yaml | kubectl apply -f - -n ${NAMESPACE}
+                    kubectl wait --for=condition=complete job/workflow-migration -n ${NAMESPACE} --timeout=120s
+                """
+            }
+        }
+
+        stage('Deploy to k3s') {
+            steps {
+                sh """
+                    kubectl set image deployment/backend backend=${REGISTRY}/workflow-backend:${BUILD_NUMBER} -n ${NAMESPACE}
+                    kubectl set image deployment/workers workers=${REGISTRY}/workflow-workers:${BUILD_NUMBER} -n ${NAMESPACE}
+                    kubectl set image deployment/frontend frontend=${REGISTRY}/workflow-frontend:${BUILD_NUMBER} -n ${NAMESPACE}
+
+                    kubectl rollout status deployment/backend -n ${NAMESPACE} --timeout=120s
+                    kubectl rollout status deployment/workers -n ${NAMESPACE} --timeout=120s
+                    kubectl rollout status deployment/frontend -n ${NAMESPACE} --timeout=60s
+                """
+            }
+        }
+
+        stage('Verify') {
+            steps {
+                sh """
+                    sleep 10
+                    curl -sf https://app.zuzuflow.com/health || (echo "Backend health check failed!" && exit 1)
+                    echo "All health checks passed!"
+                """
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Deployment #${BUILD_NUMBER} successful!"
+        }
+        failure {
+            echo "Deployment #${BUILD_NUMBER} failed!"
+            // Rollback on failure
+            sh """
+                kubectl rollout undo deployment/backend -n ${NAMESPACE} || true
+                kubectl rollout undo deployment/workers -n ${NAMESPACE} || true
+                kubectl rollout undo deployment/frontend -n ${NAMESPACE} || true
+            """
+        }
+        always {
+            // Clean up old Docker images to save disk space
+            sh "docker image prune -f || true"
+        }
+    }
+}

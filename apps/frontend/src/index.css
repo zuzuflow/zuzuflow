@@ -1,0 +1,260 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 238.7 83.5% 66.7%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 238.7 83.5% 66.7%;
+    --radius: 0.5rem;
+    --canvas-bg: #f8fafc;
+    --canvas-dot-color: #e2e8f0;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 217.2 32.6% 11%;
+    --card-foreground: 210 40% 98%;
+    --popover: 217.2 32.6% 11%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 238.7 83.5% 66.7%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 22%;
+    --input: 217.2 32.6% 22%;
+    --ring: 238.7 83.5% 66.7%;
+    --canvas-bg: #0f172a;
+    --canvas-dot-color: #1e293b;
+  }
+}
+
+/* ─── CSS custom properties for node category colours ─────────────────────── */
+:root {
+  --node-trigger-bg: #7c3aed;
+  --node-trigger-border: #6d28d9;
+  --node-trigger-light: #ede9fe;
+
+  --node-logic-bg: #d97706;
+  --node-logic-border: #b45309;
+  --node-logic-light: #fef3c7;
+
+  --node-action-bg: #059669;
+  --node-action-border: #047857;
+  --node-action-light: #d1fae5;
+
+  --node-code-bg: #e11d48;
+  --node-code-border: #be123c;
+  --node-code-light: #ffe4e6;
+
+  --edge-color: #64748b;
+  --edge-animated-color: #6366f1;
+}
+
+/* ─── Canvas dot-grid background ─────────────────────────────────────────── */
+.react-flow__background {
+  background-color: var(--canvas-bg) !important;
+}
+
+/* ─── Custom animated edge ────────────────────────────────────────────────── */
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+.animated-edge-path {
+  stroke-dasharray: 8 4;
+  animation: flow-dash 1.2s linear infinite;
+}
+
+/* ─── XY Flow overrides ───────────────────────────────────────────────────── */
+.react-flow__node {
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+}
+
+.react-flow__node.selected {
+  box-shadow: 0 0 0 2px #6366f1, 0 4px 6px -1px rgb(0 0 0 / 0.4);
+}
+
+.react-flow__handle {
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50% !important;
+  border: 2px solid hsl(var(--muted-foreground)) !important;
+  background: hsl(var(--secondary)) !important;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.react-flow__handle:hover {
+  background: #6366f1 !important;
+  border-color: #6366f1 !important;
+}
+
+.react-flow__edge-path {
+  stroke: var(--edge-color);
+  stroke-width: 2;
+}
+
+.react-flow__minimap {
+  background-color: hsl(var(--secondary)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.5rem !important;
+}
+
+.react-flow__controls {
+  background-color: hsl(var(--secondary)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.5rem !important;
+  box-shadow: none !important;
+}
+
+.react-flow__controls-button {
+  background-color: hsl(var(--secondary)) !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+  color: hsl(var(--muted-foreground)) !important;
+  fill: hsl(var(--muted-foreground)) !important;
+}
+
+.react-flow__controls-button:hover {
+  background-color: hsl(var(--accent)) !important;
+}
+
+/* ─── Scrollbar styles ────────────────────────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) hsl(var(--secondary));
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--secondary));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
+
+/* ─── Global base ─────────────────────────────────────────────────────────── */
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* ─── Utility for node status rings ──────────────────────────────────────── */
+.node-status-running {
+  box-shadow: 0 0 0 2px #f59e0b, 0 4px 6px -1px rgb(0 0 0 / 0.4);
+  animation: pulse-ring 1.5s ease-in-out infinite;
+}
+
+.node-status-completed {
+  box-shadow: 0 0 0 2px #10b981, 0 4px 6px -1px rgb(0 0 0 / 0.4);
+}
+
+.node-status-failed {
+  box-shadow: 0 0 0 2px #ef4444, 0 4px 6px -1px rgb(0 0 0 / 0.4);
+}
+
+.node-status-skipped {
+  box-shadow: 0 0 0 2px #64748b, 0 4px 6px -1px rgb(0 0 0 / 0.4);
+}
+
+@keyframes pulse-ring {
+  0%, 100% {
+    box-shadow: 0 0 0 2px #f59e0b, 0 4px 6px -1px rgb(0 0 0 / 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px #f59e0b, 0 4px 6px -1px rgb(0 0 0 / 0.4);
+  }
+}
+
+/* ─── BPMN Light theme overrides ──────────────────────────────────────────── */
+.theme-bpmn-light {
+  --canvas-bg: #f8fafc;
+  --canvas-dot-color: #e2e8f0;
+  --edge-color: #6b7280;
+  --edge-animated-color: #2563eb;
+}
+
+.theme-bpmn-light .react-flow__background {
+  background-color: #f8fafc !important;
+}
+
+.theme-bpmn-light .react-flow__node {
+  background: #ffffff;
+  border-color: #d1d5db;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1), 0 1px 2px rgb(0 0 0 / 0.06);
+}
+
+.theme-bpmn-light .react-flow__node.selected {
+  box-shadow: 0 0 0 2px #6366f1, 0 1px 3px rgb(0 0 0 / 0.1);
+}
+
+.theme-bpmn-light .react-flow__minimap {
+  background-color: #f1f5f9 !important;
+}
+
+.theme-bpmn-light .react-flow__controls {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+.theme-bpmn-light .react-flow__controls-button {
+  background-color: #ffffff !important;
+  border-bottom-color: #e2e8f0 !important;
+  color: #64748b !important;
+  fill: #64748b !important;
+}
+
+.theme-bpmn-light .react-flow__controls-button:hover {
+  background-color: #f1f5f9 !important;
+}
+
+.theme-bpmn-light .react-flow__edge-path {
+  stroke: #6b7280;
+}
+

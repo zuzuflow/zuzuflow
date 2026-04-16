@@ -1,0 +1,722 @@
+openapi: "3.0.3"
+info:
+  title: ZuzuFlow API
+  version: "1.0.0"
+  description: |
+    REST API for ZuzuFlow.
+    All endpoints are under `/api`. Executions broadcast real-time events
+    over WebSocket at `ws://<host>/ws/executions?id=<executionId>`.
+
+servers:
+  - url: http://localhost:4000/api
+    description: Local development
+
+tags:
+  - name: Workflows
+    description: Create, read, update, delete and activate/deactivate workflows
+  - name: Executions
+    description: Start, list, inspect and cancel workflow executions
+  - name: Credentials
+    description: Manage encrypted credentials (API keys, connection strings, etc.)
+  - name: Webhooks
+    description: Register inbound webhook endpoints that trigger workflows
+
+# ─── Reusable schemas ──────────────────────────────────────────────────────────
+
+components:
+  schemas:
+
+    WorkflowStatus:
+      type: string
+      enum: [draft, active, inactive, archived]
+
+    ExecutionStatus:
+      type: string
+      enum: [pending, running, completed, failed, cancelled, timed_out]
+
+    WorkflowTemplate:
+      type: object
+      required: [version, nodes, edges]
+      properties:
+        version:
+          type: string
+          example: "1.0"
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkflowNode"
+        edges:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkflowEdge"
+
+    WorkflowNode:
+      type: object
+      required: [id, kind, label, config]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+            - manual
+            - webhook
+            - cron
+            - mqtt_trigger
+            - if_else
+            - switch
+            - delay
+            - merge
+            - http_request
+            - send_email
+            - postgres_query
+            - custom_code
+            - debug
+          example: http_request
+        label:
+          type: string
+          example: "Fetch User Data"
+        config:
+          type: object
+          description: Node-specific configuration. Shape depends on `kind`.
+          example: { url: "https://api.example.com/users", method: "GET" }
+        position:
+          type: object
+          properties:
+            x: { type: number }
+            y: { type: number }
+
+    WorkflowEdge:
+      type: object
+      required: [id, source, target]
+      properties:
+        id:
+          type: string
+          format: uuid
+        source:
+          type: string
+          description: Source node ID
+        target:
+          type: string
+          description: Target node ID
+        sourceHandle:
+          type: string
+          description: Handle name (e.g. "true", "false" for If/Else; case values for Switch)
+        label:
+          type: string
+
+    Workflow:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Daily Report Generator"
+        description:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/WorkflowStatus"
+        template:
+          $ref: "#/components/schemas/WorkflowTemplate"
+        version:
+          type: integer
+          description: Incremented on each update
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    WorkflowListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/WorkflowStatus"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    WorkflowList:
+      type: object
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkflowListItem"
+
+    Execution:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workflowId:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/ExecutionStatus"
+        triggerPayload:
+          type: object
+          nullable: true
+        output:
+          type: object
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ExecutionList:
+      type: object
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Execution"
+
+    CredentialKind:
+      type: string
+      enum:
+        - postgres
+        - smtp
+        - sendgrid
+        - mqtt
+        - http_bearer
+        - http_basic
+        - http_api_key
+        - generic
+
+    Credential:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Production Postgres"
+        kind:
+          $ref: "#/components/schemas/CredentialKind"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+# ─── Paths ────────────────────────────────────────────────────────────────────
+
+paths:
+
+  # ── Workflows ────────────────────────────────────────────────────────────────
+
+  /workflows:
+    get:
+      tags: [Workflows]
+      summary: List workflows
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/WorkflowStatus"
+          description: Filter by status
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Paginated list of workflows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowList"
+
+    post:
+      tags: [Workflows]
+      summary: Create a workflow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, template]
+              properties:
+                name:
+                  type: string
+                  example: "My Workflow"
+                description:
+                  type: string
+                template:
+                  $ref: "#/components/schemas/WorkflowTemplate"
+      responses:
+        "201":
+          description: Workflow created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workflow"
+        "422":
+          description: Invalid template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /workflows/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [Workflows]
+      summary: Get a workflow (includes template)
+      responses:
+        "200":
+          description: Workflow detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workflow"
+        "404":
+          description: Not found
+
+    put:
+      tags: [Workflows]
+      summary: Update a workflow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                template:
+                  $ref: "#/components/schemas/WorkflowTemplate"
+      responses:
+        "200":
+          description: Updated workflow
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workflow"
+
+    delete:
+      tags: [Workflows]
+      summary: Delete a workflow
+      responses:
+        "204":
+          description: Deleted
+
+  /workflows/{id}/activate:
+    post:
+      tags: [Workflows]
+      summary: Activate a workflow
+      description: |
+        Sets status to `active`. If the workflow contains a Cron trigger node,
+        a Temporal Schedule is created so it fires automatically.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Activated workflow
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workflow"
+
+  /workflows/{id}/deactivate:
+    post:
+      tags: [Workflows]
+      summary: Deactivate a workflow
+      description: |
+        Sets status to `inactive`. If a Temporal Schedule exists (from a Cron trigger),
+        it is deleted so no further automatic runs are scheduled.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Deactivated workflow
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workflow"
+
+  # ── Executions ───────────────────────────────────────────────────────────────
+
+  /executions/start:
+    post:
+      tags: [Executions]
+      summary: Start a workflow execution
+      description: |
+        Manually triggers a workflow. The workflow must be in `active` status
+        (save + activate it first). Returns immediately with the new execution
+        record — monitor progress via WebSocket.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workflowId]
+              properties:
+                workflowId:
+                  type: string
+                  format: uuid
+                triggerPayload:
+                  type: object
+                  description: Arbitrary JSON passed as the trigger node's output
+      responses:
+        "201":
+          description: Execution started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Execution"
+        "409":
+          description: Workflow is not active
+
+  /executions:
+    get:
+      tags: [Executions]
+      summary: List executions
+      parameters:
+        - name: workflowId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by workflow
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ExecutionStatus"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Paginated execution list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecutionList"
+
+  /executions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [Executions]
+      summary: Get an execution (includes node logs)
+      responses:
+        "200":
+          description: Execution detail with logs
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Execution"
+                  - type: object
+                    properties:
+                      logs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            nodeId: { type: string }
+                            nodeKind: { type: string }
+                            level: { type: string, enum: [debug, info, warn, error] }
+                            message: { type: string }
+                            data: { type: object }
+                            createdAt: { type: string, format: date-time }
+
+    delete:
+      tags: [Executions]
+      summary: Cancel or delete an execution
+      description: |
+        If the execution is still running, it is cancelled in Temporal and marked `cancelled`.
+        If the execution is already in a terminal state (completed, failed, cancelled), the
+        record is deleted from the database.
+      responses:
+        "204":
+          description: Deleted (terminal execution)
+        "200":
+          description: Cancelled (was running)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Execution"
+
+  # ── Credentials ──────────────────────────────────────────────────────────────
+
+  /credentials:
+    get:
+      tags: [Credentials]
+      summary: List credentials (no secret data returned)
+      responses:
+        "200":
+          description: List of credentials
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Credential"
+
+    post:
+      tags: [Credentials]
+      summary: Create a credential
+      description: |
+        Secret values in `data` are encrypted with AES-256-GCM before storage.
+        They are never returned by the list or get endpoints.
+
+        **Credential kinds and expected `data` fields:**
+
+        | kind | fields |
+        |------|--------|
+        | `postgres` | `connectionString` |
+        | `smtp` | `host`, `port`, `user`, `pass`, `from`, `secure` |
+        | `sendgrid` | `apiKey`, `from` |
+        | `mqtt` | `brokerUrl`, `username`, `password` |
+        | `http_bearer` | `token` |
+        | `http_basic` | `username`, `password` |
+        | `http_api_key` | `headerName`, `headerValue` |
+        | `generic` | any key-value pairs |
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, kind, data]
+              properties:
+                name:
+                  type: string
+                  example: "Production DB"
+                kind:
+                  $ref: "#/components/schemas/CredentialKind"
+                data:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  example: { connectionString: "postgresql://user:pass@host/db" }
+      responses:
+        "201":
+          description: Credential created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credential"
+
+  /credentials/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    put:
+      tags: [Credentials]
+      summary: Update a credential
+      description: Provide `name` to rename, `data` to re-encrypt with new values.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                data:
+                  type: object
+                  additionalProperties:
+                    type: string
+      responses:
+        "200":
+          description: Updated credential
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credential"
+        "404":
+          description: Not found
+
+    delete:
+      tags: [Credentials]
+      summary: Delete a credential
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  # ── Webhooks ─────────────────────────────────────────────────────────────────
+
+  /webhooks/register:
+    post:
+      tags: [Webhooks]
+      summary: Register a webhook endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workflowId, path]
+              properties:
+                workflowId:
+                  type: string
+                  format: uuid
+                path:
+                  type: string
+                  description: URL path segment (must be unique)
+                  example: "my-webhook"
+                method:
+                  type: string
+                  enum: [GET, POST, PUT, PATCH, DELETE]
+                  default: POST
+                secret:
+                  type: string
+                  description: HMAC-SHA256 verification secret
+      responses:
+        "201":
+          description: Webhook endpoint registered
+
+  /webhooks/inbound/{path}:
+    post:
+      tags: [Webhooks]
+      summary: Inbound webhook trigger
+      description: |
+        Send data to this URL to trigger the associated workflow.
+        If a secret was set during registration, include the HMAC-SHA256
+        signature in the `X-Hub-Signature-256` header.
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+          example: my-webhook
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Workflow triggered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+                  executionId:
+                    type: string
+                    format: uuid
+
+# ─── WebSocket ────────────────────────────────────────────────────────────────
+
+x-websocket:
+  description: |
+    Connect to `ws://<host>/ws/executions?id=<executionId>` to receive
+    real-time events for an execution.
+
+    **Event shapes:**
+
+    ```json
+    {
+      "kind": "node_started | node_completed | node_failed | execution_started | execution_completed | execution_failed | execution_cancelled",
+      "executionId": "uuid",
+      "workflowId": "uuid",
+      "nodeId": "uuid",
+      "nodeKind": "http_request",
+      "payload": { ... },
+      "timestamp": "2026-04-10T12:00:00.000Z"
+    }
+    ```
+
+    `payload.data.output` on `node_completed` events contains the node's return value.

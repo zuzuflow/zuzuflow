@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: workflow-migration
+  namespace: workflow
+  labels:
+    app: migration
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: migration
+    spec:
+      initContainers:
+        # Wait for PostgreSQL to be ready
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h postgres-svc -p 5432 -U workflow; do
+                echo "Waiting for PostgreSQL..."
+                sleep 2
+              done
+      containers:
+        - name: migrate
+          image: localhost:5000/workflow-backend:latest
+          command:
+            - sh
+            - -c
+            - cd /app/apps/backend && pnpm exec prisma migrate deploy --schema=src/db/prisma/schema.prisma
+          envFrom:
+            - secretRef:
+                name: workflow-secrets
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+      restartPolicy: OnFailure

@@ -1,0 +1,86 @@
+# =============================================================================
+# ZuzuFlow Workers — Temporal workflow worker
+#
+# isolated-vm is baked in via the `ivm` stage below, which pulls the compiled
+# native module from `localhost:5000/ivm-prebuilt:node24-ivm6.1.2`
+# (rebuild it with: bash deploy/scripts/build-ivm.sh).
+#
+# If the prebuilt image isn't available, isolated-vm loading is caught at
+# runtime by ivm-loader.ts and the JS/TS runner falls back to the
+# child-process sandbox.
+# =============================================================================
+
+# Stage 0: prebuilt isolated-vm — a scratch image whose only content is the
+# compiled /isolated-vm directory. `COPY --from=ivm` brings it into the main
+# build stage after pnpm install.
+FROM localhost:5000/ivm-prebuilt:node24-ivm6.1.2 AS ivm
+
+FROM node:24-slim
+
+RUN apt-get update && apt-get install -y \
+    wget \
+    python3 \
+    python3-venv \
+    python3-pip \
+ && ln -sf /usr/bin/python3 /usr/local/bin/python \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
+
+WORKDIR /app
+
+# Copy root workspace config
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json ./
+
+# Copy ALL workspace package.json stubs (pnpm lockfile references all of them)
+COPY apps/backend/package.json apps/backend/package.json
+COPY apps/frontend/package.json apps/frontend/package.json
+COPY apps/workers/package.json apps/workers/package.json
+COPY packages/shared/package.json packages/shared/package.json
+COPY sdk/nodejs-sdk/package.json sdk/nodejs-sdk/package.json
+COPY sdk/react-sdk/package.json sdk/react-sdk/package.json
+
+# Install deps — skip native scripts; isolated-vm will be overlaid from the
+# prebuilt image below instead of compiling in this container.
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+# Overlay the prebuilt isolated-vm on top of the stub pnpm placed in its store.
+# pnpm creates a symlink at apps/workers/node_modules/isolated-vm pointing into
+# .pnpm/isolated-vm@<ver>_<hash>/node_modules/isolated-vm — we resolve it with
+# readlink and copy the compiled module's contents there.
+COPY --from=ivm /isolated-vm /tmp/ivm
+RUN IVM_DIR="$(readlink -f /app/apps/workers/node_modules/isolated-vm)" \
+ && if [ -z "$IVM_DIR" ] || [ ! -d "$IVM_DIR" ]; then \
+      echo "ERROR: pnpm did not create isolated-vm symlink at apps/workers/node_modules/isolated-vm" >&2; \
+      exit 1; \
+    fi \
+ && cp -a /tmp/ivm/. "$IVM_DIR/" \
+ && rm -rf /tmp/ivm \
+ && echo "[isolated-vm] overlaid at $IVM_DIR" \
+ && (cd /app/apps/workers && node -e " \
+      const ivm = require('isolated-vm'); \
+      const iso = new ivm.Isolate({ memoryLimit: 8 }); \
+      if (iso.createContextSync().evalSync('1+1') !== 2) { throw new Error('smoke fail'); } \
+      iso.dispose(); \
+      console.log('[isolated-vm] smoke test OK'); \
+    ")
+
+# Copy actual source for workers + shared dependency
+COPY packages/shared/ packages/shared/
+COPY apps/workers/ apps/workers/
+
+# Build shared first, then patch exports to point to compiled dist/ output
+RUN pnpm --filter @workflow/shared build
+RUN cd packages/shared && node -e "\
+  const pkg = require('./package.json'); \
+  pkg.main = './dist/index.js'; \
+  pkg.types = './dist/index.d.ts'; \
+  pkg.exports = { '.': './dist/index.js' }; \
+  require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');"
+
+# Build workers
+RUN pnpm --filter workers build
+
+ENV NODE_ENV=production
+
+CMD ["node", "apps/workers/dist/worker.js"]

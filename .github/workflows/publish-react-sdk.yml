@@ -1,0 +1,58 @@
+# =============================================================================
+# Publish @zuzuflow/react-sdk to npm
+#
+# Triggered by pushing a tag of the form `react-sdk-v<version>` — e.g.
+#   git tag react-sdk-v0.1.1 && git push origin react-sdk-v0.1.1
+#
+# Note: the react-sdk build resolves imports from packages/shared and
+# apps/frontend via Vite aliases, so the full monorepo checkout is required.
+# =============================================================================
+name: Publish react-sdk
+
+on:
+  push:
+    tags:
+      - 'react-sdk-v*'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Required for npm provenance attestations
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Verify tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/react-sdk-v')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#react-sdk-v}"
+          PKG_VERSION=$(node -p "require('./sdk/react-sdk/package.json').version")
+          echo "Tag: $TAG_VERSION  Package: $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match package.json ($PKG_VERSION)"
+            exit 1
+          fi
+
+      - name: Build
+        run: pnpm --filter @zuzuflow/react-sdk build
+
+      - name: Publish to npm
+        run: pnpm --filter @zuzuflow/react-sdk publish --access public --no-git-checks --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

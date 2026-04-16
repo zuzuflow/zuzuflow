@@ -1,0 +1,57 @@
+# =============================================================================
+# ZuzuFlow — Prebuilt isolated-vm base image
+#
+# Compiles isolated-vm once in a builder stage (where CI has enough RAM) and
+# produces a minimal `scratch`-based image whose only content is a populated
+# /isolated-vm directory. Referenced by Dockerfile.workers via `COPY --from=`.
+#
+# Rebuild only when:
+#   - Bumping the Node major version (MUST match workers' runtime Node major)
+#   - Bumping the isolated-vm version
+#
+# Build + publish to the local registry:
+#   bash deploy/scripts/build-ivm.sh
+# =============================================================================
+
+# ----- Stage 1: compile isolated-vm from source -------------------------------
+FROM node:24-slim AS builder
+
+ARG IVM_VERSION=6.1.2
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3 make g++ ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Minimal package.json so npm install has something to anchor to
+RUN npm init -y > /dev/null
+
+# JOBS=2 caps parallel C++ compilation — prevents OOM on small build hosts
+RUN JOBS=2 npm install --no-audit --no-fund "isolated-vm@${IVM_VERSION}"
+
+# Strip build junk — keep only what's needed to require() the module at runtime
+RUN find node_modules/isolated-vm -name "*.o"   -delete \
+ && find node_modules/isolated-vm -name "*.o.d" -delete \
+ && rm -rf \
+      node_modules/isolated-vm/build/Release/obj.target \
+      node_modules/isolated-vm/build/Release/.deps \
+      node_modules/isolated-vm/src \
+      node_modules/isolated-vm/.github \
+      node_modules/isolated-vm/docs 2>/dev/null || true
+
+# Smoke test: the compiled binary must actually load on this Node version
+RUN node -e " \
+  const ivm = require('/build/node_modules/isolated-vm'); \
+  const iso = new ivm.Isolate({ memoryLimit: 8 }); \
+  const out = iso.createContextSync().evalSync('1 + 1'); \
+  iso.dispose(); \
+  if (out !== 2) { throw new Error('isolated-vm smoke test failed'); } \
+  console.log('isolated-vm', process.versions.node, 'OK'); \
+"
+
+# ----- Stage 2: minimal export image -----------------------------------------
+# scratch keeps this image tiny — consumers only `COPY --from=ivm /isolated-vm`
+FROM scratch
+
+COPY --from=builder /build/node_modules/isolated-vm /isolated-vm
