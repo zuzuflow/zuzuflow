@@ -6,6 +6,7 @@ import { userService } from "../services/UserService";
 import { apiTokenService } from "../services/ApiTokenService";
 import { organizationService } from "../services/OrganizationService";
 import { requireAuth } from "../middleware/auth";
+import { prisma } from "../db/client";
 
 export const authRouter: Router = Router();
 
@@ -51,14 +52,21 @@ authRouter.post("/login", async (req: Request, res: Response) => {
   }
 
   if (orgs.length === 1) {
-    // Single org — include orgId in JWT
+    // Single org — include orgId in JWT.
+    // System-level roles (superadmin/admin) always win over org-level membership
+    // roles. A superadmin is superadmin everywhere, regardless of how they joined
+    // any specific org.
     const membership = await organizationService.getOrgMembership(user.id, orgs[0].id);
+    const systemRole = user.role;
+    const effectiveRole = systemRole === "superadmin" || systemRole === "admin"
+      ? systemRole
+      : membership?.role ?? systemRole;
     const token = jwt.sign(
-      { sub: user.id, username: user.username, role: membership?.role ?? user.role, orgId: orgs[0].id },
+      { sub: user.id, username: user.username, role: effectiveRole, orgId: orgs[0].id },
       config.JWT_SECRET,
       { expiresIn: JWT_EXPIRY },
     );
-    logger.info("Login successful (single org)", { userId: user.id, orgId: orgs[0].id, ip: req.ip });
+    logger.info("Login successful (single org)", { userId: user.id, orgId: orgs[0].id, role: effectiveRole, ip: req.ip });
     return res.json({ token, expiresIn: JWT_EXPIRY, user, organization: orgs[0] });
   }
 
@@ -108,8 +116,14 @@ authRouter.post("/signup", async (req: Request, res: Response) => {
     const org = await organizationService.listUserOrganizations(user.id);
     const organization = org.find((o) => o.id === organizationId) ?? org[0];
 
+    // The very first signup is a superadmin (see UserService.signup). Reflect
+    // that in the JWT; otherwise fall back to "owner" for the new org they just
+    // created.
+    const effectiveRole = user.role === "superadmin" || user.role === "admin"
+      ? user.role
+      : "owner";
     const token = jwt.sign(
-      { sub: user.id, username: user.username, role: "owner", orgId: organizationId },
+      { sub: user.id, username: user.username, role: effectiveRole, orgId: organizationId },
       config.JWT_SECRET,
       { expiresIn: JWT_EXPIRY },
     );
@@ -163,13 +177,20 @@ authRouter.post("/switch-org", requireAuth, async (req: Request, res: Response) 
     const raw = authHeader.slice(7);
     const decoded = jwt.verify(raw, config.JWT_SECRET) as { sub: string; username: string };
 
+    // System-level roles (superadmin/admin) always win over org-level membership.
+    const fullUser = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    const systemRole = fullUser?.role ?? "editor";
+    const effectiveRole = systemRole === "superadmin" || systemRole === "admin"
+      ? systemRole
+      : membership.role;
+
     const token = jwt.sign(
-      { sub: decoded.sub, username: decoded.username, role: membership.role, orgId: organizationId },
+      { sub: decoded.sub, username: decoded.username, role: effectiveRole, orgId: organizationId },
       config.JWT_SECRET,
       { expiresIn: JWT_EXPIRY },
     );
 
-    logger.info("Org switch", { userId, organizationId });
+    logger.info("Org switch", { userId, organizationId, role: effectiveRole });
     return res.json({ token, expiresIn: JWT_EXPIRY });
   } catch (err) {
     return res.status(errStatus(err)).json({ error: (err as Error).message });
