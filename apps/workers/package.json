@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "ts-node src/worker.ts",
+    "dev": "ts-node --transpile-only src/worker.ts",
     "build": "tsc --project tsconfig.json",
     "start": "node dist/worker.js",
     "lint": "tsc --noEmit",

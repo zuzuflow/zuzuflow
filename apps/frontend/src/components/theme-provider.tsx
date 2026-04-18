@@ -21,10 +21,10 @@ interface ThemeProviderProps {
 export function ThemeProvider({
   children,
   defaultTheme = "dark",
-  storageKey = "trioflow-theme",
+  storageKey = "zuzuflow-theme",
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
+    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme,
   );
 
   useEffect(() => {

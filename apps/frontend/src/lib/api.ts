@@ -24,7 +24,7 @@ function envPrefix(): string {
 
 export async function request<T>(
   path: string,
-  options?: RequestInit
+  options?: RequestInit,
 ): Promise<T> {
   const { token, clearAuth } = getApiConfig();
   const url = `${API_BASE_URL}${path}`;
@@ -45,12 +45,16 @@ export async function request<T>(
   // Auto-logout on 401 (token expired / revoked)
   if (res.status === 401) {
     clearAuth();
-    throw new Error(`API ${options?.method ?? "GET"} ${path} → 401: Unauthorized`);
+    throw new Error(
+      `API ${options?.method ?? "GET"} ${path} → 401: Unauthorized`,
+    );
   }
 
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new Error(`API ${options?.method ?? "GET"} ${path} → ${res.status}: ${text}`);
+    throw new Error(
+      `API ${options?.method ?? "GET"} ${path} → ${res.status}: ${text}`,
+    );
   }
 
   // DELETE returns 204 with no body
@@ -78,6 +82,7 @@ export interface OrgDetail {
   name: string;
   slug: string;
   address?: string;
+  mfaEnforced: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -99,25 +104,80 @@ export interface ApiTokenCreated extends ApiTokenPublic {
 export interface LoginResult {
   token: string;
   user: { id: string; username: string; email?: string; role: string };
-  organization?: { id: string; name: string; slug: string };
-  organizations?: Array<{ id: string; name: string; slug: string; role: string }>;
+  organization?: {
+    id: string;
+    name: string;
+    slug: string;
+    mfaEnforced?: boolean;
+  };
+  organizations?: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    role: string;
+    mfaEnforced?: boolean;
+  }>;
+}
+
+export interface MfaEnrollmentRequiredResult {
+  mfaEnrollmentRequired: true;
+  token: string;
+  expiresIn: string;
+  message: string;
+  user?: { id: string; username: string; email?: string; role: string };
+  organization: {
+    id: string;
+    name: string;
+    slug: string;
+    role?: string;
+    mfaEnforced?: boolean;
+  };
+}
+
+export interface MfaChallengeResult {
+  mfaRequired: true;
+  challengeToken: string;
+  emailChallengeId?: string;
+  mfaMethods: { totp: boolean; email: boolean };
+}
+
+export interface MfaStatus {
+  totpEnabled: boolean;
+  emailEnabled: boolean;
+  backupCodesRemaining: number;
+}
+
+export interface TotpSetupResult {
+  secret: string;
+  otpauthUrl: string;
+  qrCodeUrl: string;
 }
 
 /**
  * Login with username/email + password. Stores returned JWT in apiConfigStore.
  * Returns the full login result so the caller can handle multi-org scenarios.
+ * If MFA is required, returns MfaChallengeResult instead of storing a token.
  */
-export async function login(usernameOrEmail: string, password: string): Promise<LoginResult> {
+export async function login(
+  usernameOrEmail: string,
+  password: string,
+): Promise<LoginResult | MfaChallengeResult | MfaEnrollmentRequiredResult> {
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ usernameOrEmail, password }),
   });
   if (!res.ok) {
-    const data = await res.json().catch(() => ({})) as { error?: string };
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error || "Invalid credentials");
   }
-  const result = await res.json() as LoginResult;
+  const result = (await res.json()) as
+    | LoginResult
+    | MfaChallengeResult
+    | MfaEnrollmentRequiredResult;
+  if ("mfaRequired" in result) {
+    return result; // caller must complete MFA
+  }
   getApiConfig().setToken(result.token);
   return result;
 }
@@ -130,7 +190,7 @@ export async function signup(
   orgName: string,
   username: string,
   email: string,
-  password: string
+  password: string,
 ): Promise<LoginResult> {
   const res = await fetch(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
@@ -138,10 +198,10 @@ export async function signup(
     body: JSON.stringify({ orgName, username, email, password }),
   });
   if (!res.ok) {
-    const data = await res.json().catch(() => ({})) as { error?: string };
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error || "Signup failed");
   }
-  const result = await res.json() as LoginResult;
+  const result = (await res.json()) as LoginResult;
   getApiConfig().setToken(result.token);
   return result;
 }
@@ -156,13 +216,18 @@ export function listMyOrganizations(): Promise<OrgItem[]> {
 /**
  * Switch to a different organization. Returns a new JWT scoped to that org.
  */
-export async function switchOrganization(organizationId: string): Promise<string> {
-  const result = await request<{ token: string }>("/auth/switch-org", {
-    method: "POST",
-    body: JSON.stringify({ organizationId }),
-  });
+export async function switchOrganization(
+  organizationId: string,
+): Promise<{ token: string } | MfaEnrollmentRequiredResult> {
+  const result = await request<{ token: string } | MfaEnrollmentRequiredResult>(
+    "/auth/switch-org",
+    {
+      method: "POST",
+      body: JSON.stringify({ organizationId }),
+    },
+  );
   getApiConfig().setToken(result.token);
-  return result.token;
+  return result;
 }
 
 // ─── User management API ──────────────────────────────────────────────────────
@@ -171,7 +236,12 @@ export function listUsers(): Promise<UserPublic[]> {
   return request<UserPublic[]>("/auth/users");
 }
 
-export function createUser(username: string, email: string, password: string, role?: "admin" | "editor"): Promise<UserPublic> {
+export function createUser(
+  username: string,
+  email: string,
+  password: string,
+  role?: "admin" | "editor",
+): Promise<UserPublic> {
   return request<UserPublic>("/auth/users", {
     method: "POST",
     body: JSON.stringify({ username, email, password, role }),
@@ -182,14 +252,21 @@ export function getOrganization(): Promise<OrgDetail> {
   return request<OrgDetail>("/auth/organization");
 }
 
-export function updateOrganization(data: { name?: string; address?: string }): Promise<OrgDetail> {
+export function updateOrganization(data: {
+  name?: string;
+  address?: string;
+  mfaEnforced?: boolean;
+}): Promise<OrgDetail> {
   return request<OrgDetail>("/auth/organization", {
     method: "PUT",
     body: JSON.stringify(data),
   });
 }
 
-export function changePassword(userId: string, password: string): Promise<void> {
+export function changePassword(
+  userId: string,
+  password: string,
+): Promise<void> {
   return request<void>(`/auth/users/${userId}/password`, {
     method: "PUT",
     body: JSON.stringify({ password }),
@@ -215,6 +292,131 @@ export function createApiToken(name: string): Promise<ApiTokenCreated> {
 
 export function revokeApiToken(id: string): Promise<void> {
   return request<void>(`/auth/tokens/${id}`, { method: "DELETE" });
+}
+
+// ─── MFA API ──────────────────────────────────────────────────────────────────
+
+/**
+ * Complete MFA login after password challenge.
+ * Stores the returned JWT in apiConfigStore on success.
+ */
+export async function verifyMfaLogin(
+  challengeToken: string,
+  method: "totp" | "email" | "backup",
+  code: string,
+  emailChallengeId?: string,
+): Promise<LoginResult> {
+  const res = await fetch(`${API_BASE_URL}/auth/mfa/verify-login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challengeToken, method, code, emailChallengeId }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "Verification failed");
+  }
+  const result = (await res.json()) as LoginResult;
+  getApiConfig().setToken(result.token);
+  return result;
+}
+
+/** Resend email OTP for a login challenge. */
+export async function resendMfaEmailOtp(
+  challengeToken: string,
+): Promise<{ emailChallengeId: string }> {
+  const res = await fetch(`${API_BASE_URL}/auth/mfa/resend-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challengeToken }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "Failed to resend email");
+  }
+  return res.json() as Promise<{ emailChallengeId: string }>;
+}
+
+export function getMfaStatus(): Promise<MfaStatus> {
+  return request<MfaStatus>("/auth/mfa/status");
+}
+
+export function setupTotp(): Promise<TotpSetupResult> {
+  return request<TotpSetupResult>("/auth/mfa/totp/setup", { method: "POST" });
+}
+
+export function enableTotp(code: string): Promise<{ backupCodes: string[] }> {
+  return request<{ backupCodes: string[] }>("/auth/mfa/totp/enable", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+}
+
+export function disableTotp(code: string): Promise<void> {
+  return request<void>("/auth/mfa/totp/disable", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+}
+
+export function enableEmailOtp(): Promise<void> {
+  return request<void>("/auth/mfa/email/enable", { method: "POST" });
+}
+
+export function disableEmailOtp(): Promise<void> {
+  return request<void>("/auth/mfa/email/disable", { method: "POST" });
+}
+
+export function regenerateBackupCodes(
+  code: string,
+): Promise<{ backupCodes: string[] }> {
+  return request<{ backupCodes: string[] }>(
+    "/auth/mfa/backup-codes/regenerate",
+    {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    },
+  );
+}
+
+/** Step 1: verify password, send email OTP to the account's registered address. */
+export async function recoverMfaStart(
+  usernameOrEmail: string,
+  password: string,
+): Promise<{ challengeId: string; emailMasked: string }> {
+  const res = await fetch(`${API_BASE_URL}/auth/mfa/recover/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ usernameOrEmail, password }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as any).error || "MFA recovery failed");
+  }
+  return res.json();
+}
+
+/** Step 2: verify the email OTP and clear all MFA. */
+export async function recoverMfaConfirm(
+  challengeId: string,
+  emailCode: string,
+): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE_URL}/auth/mfa/recover/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challengeId, emailCode }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as any).error || "Invalid or expired code");
+  }
+  return res.json();
+}
+
+/** Admin: forcefully clear all MFA for a user by their ID. */
+export function adminResetMfa(userId: string): Promise<{ message: string }> {
+  return request<{ message: string }>(`/auth/mfa/admin/reset/${userId}`, {
+    method: "POST",
+  });
 }
 
 // ─── Workflow types ───────────────────────────────────────────────────────────
@@ -365,7 +567,13 @@ export interface ExecutionNodeMeta {
 }
 
 export interface ExecutionLogsResult {
-  execution: { id: string; status: ExecutionStatus; workflowId: string; startedAt: string; completedAt?: string };
+  execution: {
+    id: string;
+    status: ExecutionStatus;
+    workflowId: string;
+    startedAt: string;
+    completedAt?: string;
+  };
   total: number;
   logs: ExecutionLogEntry[];
   nodes: ExecutionNodeMeta[];
@@ -419,14 +627,20 @@ export function listEnvironments(): Promise<EnvironmentItem[]> {
   return request<EnvironmentItem[]>("/environments");
 }
 
-export function createEnvironment(name: string, slug: string): Promise<EnvironmentItem> {
+export function createEnvironment(
+  name: string,
+  slug: string,
+): Promise<EnvironmentItem> {
   return request<EnvironmentItem>("/environments", {
     method: "POST",
     body: JSON.stringify({ name, slug }),
   });
 }
 
-export function updateEnvironment(id: string, data: { name?: string; slug?: string }): Promise<EnvironmentItem> {
+export function updateEnvironment(
+  id: string,
+  data: { name?: string; slug?: string },
+): Promise<EnvironmentItem> {
   return request<EnvironmentItem>(`/environments/${id}`, {
     method: "PUT",
     body: JSON.stringify(data),
@@ -445,19 +659,30 @@ export interface EnvironmentMember {
   createdAt: string;
 }
 
-export function listEnvironmentMembers(envId: string): Promise<EnvironmentMember[]> {
+export function listEnvironmentMembers(
+  envId: string,
+): Promise<EnvironmentMember[]> {
   return request<EnvironmentMember[]>(`/environments/${envId}/members`);
 }
 
-export function addEnvironmentMember(envId: string, userId: string, role?: string): Promise<EnvironmentMember> {
+export function addEnvironmentMember(
+  envId: string,
+  userId: string,
+  role?: string,
+): Promise<EnvironmentMember> {
   return request<EnvironmentMember>(`/environments/${envId}/members`, {
     method: "POST",
     body: JSON.stringify({ userId, role }),
   });
 }
 
-export function removeEnvironmentMember(envId: string, memberId: string): Promise<void> {
-  return request<void>(`/environments/${envId}/members/${memberId}`, { method: "DELETE" });
+export function removeEnvironmentMember(
+  envId: string,
+  memberId: string,
+): Promise<void> {
+  return request<void>(`/environments/${envId}/members/${memberId}`, {
+    method: "DELETE",
+  });
 }
 
 // ─── Workflow API (environment-scoped) ───────────────────────────────────────
@@ -473,21 +698,23 @@ export interface WorkflowListFilters {
 }
 
 export function listWorkflows(
-  filters?: string | WorkflowListFilters
+  filters?: string | WorkflowListFilters,
 ): Promise<PaginatedResult<WorkflowListItem>> {
   // Backwards-compat: a bare string is treated as folderId
   const f: WorkflowListFilters =
-    typeof filters === "string" ? { folderId: filters } : filters ?? {};
+    typeof filters === "string" ? { folderId: filters } : (filters ?? {});
 
   const params = new URLSearchParams();
   if (f.folderId) params.set("folderId", f.folderId);
-  if (f.tagsAny && f.tagsAny.length > 0) params.set("tags", f.tagsAny.join(","));
-  if (f.tagsAll && f.tagsAll.length > 0) params.set("tagsAll", f.tagsAll.join(","));
+  if (f.tagsAny && f.tagsAny.length > 0)
+    params.set("tags", f.tagsAny.join(","));
+  if (f.tagsAll && f.tagsAll.length > 0)
+    params.set("tagsAll", f.tagsAll.join(","));
   params.set("limit", String(f.limit ?? 200));
   if (f.offset) params.set("offset", String(f.offset));
 
   return request<PaginatedResult<WorkflowListItem>>(
-    `${envPrefix()}/workflows?${params.toString()}`
+    `${envPrefix()}/workflows?${params.toString()}`,
   );
 }
 
@@ -499,7 +726,7 @@ export function listTags(): Promise<Tag[]> {
 
 export function updateTag(
   name: string,
-  input: { name?: string; color?: string | null }
+  input: { name?: string; color?: string | null },
 ): Promise<Tag> {
   return request<Tag>(`${envPrefix()}/tags/${encodeURIComponent(name)}`, {
     method: "PATCH",
@@ -514,7 +741,9 @@ export function deleteTag(name: string): Promise<void> {
 }
 
 export function listSubworkflows(): Promise<PaginatedResult<WorkflowListItem>> {
-  return request<PaginatedResult<WorkflowListItem>>(`${envPrefix()}/workflows?isSubworkflow=true&limit=200`);
+  return request<PaginatedResult<WorkflowListItem>>(
+    `${envPrefix()}/workflows?isSubworkflow=true&limit=200`,
+  );
 }
 
 // ─── Folder API ───────────────────────────────────────────────────────────────
@@ -523,23 +752,41 @@ export function listFolders(): Promise<FolderItem[]> {
   return request<FolderItem[]>(`${envPrefix()}/folders`);
 }
 
-export function createFolder(name: string, parentId?: string): Promise<FolderItem> {
-  return request<FolderItem>(`${envPrefix()}/folders`, { method: "POST", body: JSON.stringify({ name, parentId }) });
+export function createFolder(
+  name: string,
+  parentId?: string,
+): Promise<FolderItem> {
+  return request<FolderItem>(`${envPrefix()}/folders`, {
+    method: "POST",
+    body: JSON.stringify({ name, parentId }),
+  });
 }
 
 export function renameFolder(id: string, name: string): Promise<FolderItem> {
-  return request<FolderItem>(`${envPrefix()}/folders/${id}`, { method: "PUT", body: JSON.stringify({ name }) });
+  return request<FolderItem>(`${envPrefix()}/folders/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ name }),
+  });
 }
 
-export function moveFolder(id: string, parentId: string | null): Promise<FolderItem> {
-  return request<FolderItem>(`${envPrefix()}/folders/${id}/move`, { method: "PATCH", body: JSON.stringify({ parentId }) });
+export function moveFolder(
+  id: string,
+  parentId: string | null,
+): Promise<FolderItem> {
+  return request<FolderItem>(`${envPrefix()}/folders/${id}/move`, {
+    method: "PATCH",
+    body: JSON.stringify({ parentId }),
+  });
 }
 
 export function deleteFolder(id: string): Promise<void> {
   return request<void>(`${envPrefix()}/folders/${id}`, { method: "DELETE" });
 }
 
-export function moveWorkflowToFolder(workflowId: string, folderId: string | null): Promise<void> {
+export function moveWorkflowToFolder(
+  workflowId: string,
+  folderId: string | null,
+): Promise<void> {
   return request<void>(`${envPrefix()}/workflows/${workflowId}`, {
     method: "PUT",
     body: JSON.stringify({ folderId }),
@@ -553,7 +800,10 @@ export function getGitConfig(): Promise<GitConfig | null> {
 }
 
 export function saveGitConfig(cfg: GitConfig): Promise<void> {
-  return request<void>("/git/config", { method: "PUT", body: JSON.stringify(cfg) });
+  return request<void>("/git/config", {
+    method: "PUT",
+    body: JSON.stringify(cfg),
+  });
 }
 
 export function getGitStatus(): Promise<GitStatus> {
@@ -561,14 +811,20 @@ export function getGitStatus(): Promise<GitStatus> {
 }
 
 export function gitPush(): Promise<{ committed: number; message: string }> {
-  return request<{ committed: number; message: string }>("/git/push", { method: "POST" });
+  return request<{ committed: number; message: string }>("/git/push", {
+    method: "POST",
+  });
 }
 
 export function gitPull(): Promise<{ upserted: number; message: string }> {
-  return request<{ upserted: number; message: string }>("/git/pull", { method: "POST" });
+  return request<{ upserted: number; message: string }>("/git/pull", {
+    method: "POST",
+  });
 }
 
-export function createWorkflow(payload: CreateWorkflowPayload): Promise<WorkflowDetail> {
+export function createWorkflow(
+  payload: CreateWorkflowPayload,
+): Promise<WorkflowDetail> {
   return request<WorkflowDetail>(`${envPrefix()}/workflows`, {
     method: "POST",
     body: JSON.stringify(payload),
@@ -581,7 +837,7 @@ export function getWorkflow(id: string): Promise<WorkflowDetail> {
 
 export function updateWorkflow(
   id: string,
-  payload: UpdateWorkflowPayload
+  payload: UpdateWorkflowPayload,
 ): Promise<WorkflowDetail> {
   return request<WorkflowDetail>(`${envPrefix()}/workflows/${id}`, {
     method: "PUT",
@@ -594,18 +850,22 @@ export function deleteWorkflow(id: string): Promise<void> {
 }
 
 export function activateWorkflow(id: string): Promise<WorkflowDetail> {
-  return request<WorkflowDetail>(`${envPrefix()}/workflows/${id}/activate`, { method: "POST" });
+  return request<WorkflowDetail>(`${envPrefix()}/workflows/${id}/activate`, {
+    method: "POST",
+  });
 }
 
 export function deactivateWorkflow(id: string): Promise<WorkflowDetail> {
-  return request<WorkflowDetail>(`${envPrefix()}/workflows/${id}/deactivate`, { method: "POST" });
+  return request<WorkflowDetail>(`${envPrefix()}/workflows/${id}/deactivate`, {
+    method: "POST",
+  });
 }
 
 // ─── Execution API ────────────────────────────────────────────────────────────
 
 export function startExecution(
   workflowId: string,
-  triggerPayload?: Record<string, unknown>
+  triggerPayload?: Record<string, unknown>,
 ): Promise<ExecutionDetail> {
   return request<ExecutionDetail>(`${envPrefix()}/executions/start`, {
     method: "POST",
@@ -622,7 +882,7 @@ export function cancelExecution(id: string): Promise<void> {
 }
 
 export function listExecutions(
-  filtersOrWorkflowId: string | ExecutionListFilters = {}
+  filtersOrWorkflowId: string | ExecutionListFilters = {},
 ): Promise<PaginatedResult<ExecutionDetail>> {
   const filters: ExecutionListFilters =
     typeof filtersOrWorkflowId === "string"
@@ -639,11 +899,13 @@ export function listExecutions(
   if (filters.offset) params.set("offset", String(filters.offset));
 
   return request<PaginatedResult<ExecutionDetail>>(
-    `${envPrefix()}/executions?${params.toString()}`
+    `${envPrefix()}/executions?${params.toString()}`,
   );
 }
 
-export function searchLogs(filters: LogSearchFilters = {}): Promise<PaginatedResult<LogSearchItem>> {
+export function searchLogs(
+  filters: LogSearchFilters = {},
+): Promise<PaginatedResult<LogSearchItem>> {
   const params = new URLSearchParams();
   if (filters.q && filters.q.trim()) params.set("q", filters.q.trim());
   if (filters.level) params.set("level", filters.level);
@@ -654,11 +916,14 @@ export function searchLogs(filters: LogSearchFilters = {}): Promise<PaginatedRes
   params.set("limit", String(filters.limit ?? 100));
   if (filters.offset) params.set("offset", String(filters.offset));
   return request<PaginatedResult<LogSearchItem>>(
-    `${envPrefix()}/executions/logs/search?${params.toString()}`
+    `${envPrefix()}/executions/logs/search?${params.toString()}`,
   );
 }
 
-export function getExecutionLogs(id: string, filters?: ExecutionLogsFilter): Promise<ExecutionLogsResult> {
+export function getExecutionLogs(
+  id: string,
+  filters?: ExecutionLogsFilter,
+): Promise<ExecutionLogsResult> {
   const params = new URLSearchParams();
   if (filters?.nodeId) params.set("nodeId", filters.nodeId);
   if (filters?.nodeKind) params.set("nodeKind", filters.nodeKind);
@@ -667,7 +932,9 @@ export function getExecutionLogs(id: string, filters?: ExecutionLogsFilter): Pro
   if (filters?.limit) params.set("limit", String(filters.limit));
   if (filters?.offset) params.set("offset", String(filters.offset));
   const qs = params.toString();
-  return request<ExecutionLogsResult>(`${envPrefix()}/executions/${id}/logs${qs ? `?${qs}` : ""}`);
+  return request<ExecutionLogsResult>(
+    `${envPrefix()}/executions/${id}/logs${qs ? `?${qs}` : ""}`,
+  );
 }
 
 // ─── Credential types ─────────────────────────────────────────────────────────
@@ -729,7 +996,7 @@ export function createCredential(payload: {
 
 export function updateCredential(
   id: string,
-  payload: { name?: string; data?: Record<string, string> }
+  payload: { name?: string; data?: Record<string, string> },
 ): Promise<CredentialItem> {
   return request<CredentialItem>(`${envPrefix()}/credentials/${id}`, {
     method: "PUT",
@@ -738,7 +1005,9 @@ export function updateCredential(
 }
 
 export function deleteCredential(id: string): Promise<void> {
-  return request<void>(`${envPrefix()}/credentials/${id}`, { method: "DELETE" });
+  return request<void>(`${envPrefix()}/credentials/${id}`, {
+    method: "DELETE",
+  });
 }
 
 // ─── Variable types ───────────────────────────────────────────────────────────
@@ -774,7 +1043,7 @@ export function createVariable(payload: {
 
 export function updateVariable(
   id: string,
-  payload: { key?: string; value?: string; description?: string }
+  payload: { key?: string; value?: string; description?: string },
 ): Promise<VariableItem> {
   return request<VariableItem>(`${envPrefix()}/variables/${id}`, {
     method: "PUT",

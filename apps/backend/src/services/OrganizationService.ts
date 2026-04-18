@@ -10,6 +10,7 @@ export interface OrgPublic {
   name: string;
   slug: string;
   role: string;
+  mfaEnforced: boolean;
   createdAt: string;
 }
 
@@ -18,6 +19,7 @@ export interface OrgDetail {
   name: string;
   slug: string;
   address?: string;
+  mfaEnforced: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -26,14 +28,19 @@ export class OrganizationService {
   // ---------------------------------------------------------------------------
   // Create org with owner — sets up org, membership, default environment
   // ---------------------------------------------------------------------------
-  async createOrgWithOwner(orgName: string, userId: string): Promise<OrgPublic> {
+  async createOrgWithOwner(
+    orgName: string,
+    userId: string,
+  ): Promise<OrgPublic> {
     if (!orgName.trim()) {
-      throw Object.assign(new Error("Organization name is required"), { code: "VALIDATION_ERROR" });
+      throw Object.assign(new Error("Organization name is required"), {
+        code: "VALIDATION_ERROR",
+      });
     }
 
     const slug = await this._uniqueSlug(orgName);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // 1. Create the organization
       const org = await tx.organization.create({
         data: { name: orgName.trim(), slug },
@@ -73,6 +80,7 @@ export class OrganizationService {
       name: result.name,
       slug: result.slug,
       role: "owner",
+      mfaEnforced: result.mfaEnforced,
       createdAt: result.createdAt.toISOString(),
     };
   }
@@ -87,11 +95,12 @@ export class OrganizationService {
       orderBy: { organization: { name: "asc" } },
     });
 
-    return memberships.map((m) => ({
+    return memberships.map((m: (typeof memberships)[number]) => ({
       id: m.organization.id,
       name: m.organization.name,
       slug: m.organization.slug,
       role: m.role,
+      mfaEnforced: m.organization.mfaEnforced,
       createdAt: m.organization.createdAt.toISOString(),
     }));
   }
@@ -99,7 +108,10 @@ export class OrganizationService {
   // ---------------------------------------------------------------------------
   // Check membership — returns role or null
   // ---------------------------------------------------------------------------
-  async getOrgMembership(userId: string, orgId: string): Promise<{ role: string } | null> {
+  async getOrgMembership(
+    userId: string,
+    orgId: string,
+  ): Promise<{ role: string } | null> {
     const membership = await prisma.orgMember.findUnique({
       where: { userId_organizationId: { userId, organizationId: orgId } },
     });
@@ -117,6 +129,7 @@ export class OrganizationService {
       name: org.name,
       slug: org.slug,
       address: org.address ?? undefined,
+      mfaEnforced: org.mfaEnforced,
       createdAt: org.createdAt.toISOString(),
       updatedAt: org.updatedAt.toISOString(),
     };
@@ -125,23 +138,34 @@ export class OrganizationService {
   // ---------------------------------------------------------------------------
   // Update org details
   // ---------------------------------------------------------------------------
-  async updateOrganization(orgId: string, data: { name?: string; address?: string }): Promise<OrgDetail> {
+  async updateOrganization(
+    orgId: string,
+    data: { name?: string; address?: string; mfaEnforced?: boolean },
+  ): Promise<OrgDetail> {
     const updateData: Record<string, unknown> = {};
-    if (data.name !== undefined && data.name.trim()) updateData.name = data.name.trim();
-    if (data.address !== undefined) updateData.address = data.address.trim() || null;
+    if (data.name !== undefined && data.name.trim())
+      updateData.name = data.name.trim();
+    if (data.address !== undefined)
+      updateData.address = data.address.trim() || null;
+    if (data.mfaEnforced !== undefined)
+      updateData.mfaEnforced = data.mfaEnforced;
 
     const org = await prisma.organization.update({
       where: { id: orgId },
       data: updateData,
     });
 
-    logger.info("Organization updated", { orgId, fields: Object.keys(updateData) });
+    logger.info("Organization updated", {
+      orgId,
+      fields: Object.keys(updateData),
+    });
 
     return {
       id: org.id,
       name: org.name,
       slug: org.slug,
       address: org.address ?? undefined,
+      mfaEnforced: org.mfaEnforced,
       createdAt: org.createdAt.toISOString(),
       updatedAt: org.updatedAt.toISOString(),
     };
@@ -162,10 +186,15 @@ export class OrganizationService {
   private async _uniqueSlug(name: string): Promise<string> {
     const base = this.slugify(name);
     if (!base) {
-      throw Object.assign(new Error("Cannot generate slug from organization name"), { code: "VALIDATION_ERROR" });
+      throw Object.assign(
+        new Error("Cannot generate slug from organization name"),
+        { code: "VALIDATION_ERROR" },
+      );
     }
 
-    const existing = await prisma.organization.findUnique({ where: { slug: base } });
+    const existing = await prisma.organization.findUnique({
+      where: { slug: base },
+    });
     if (!existing) return base;
 
     // Collision: append random 4 characters

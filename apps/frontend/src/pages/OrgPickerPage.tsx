@@ -34,7 +34,8 @@ export function OrgPickerPage(): React.ReactElement {
 
   useEffect(() => {
     // Try to get orgs from route state first
-    const stateOrgs = (location.state as { organizations?: OrgItem[] })?.organizations;
+    const stateOrgs = (location.state as { organizations?: OrgItem[] })
+      ?.organizations;
     if (stateOrgs && stateOrgs.length > 0) {
       setOrgs(stateOrgs);
       setOrganizations(stateOrgs);
@@ -47,7 +48,9 @@ export function OrgPickerPage(): React.ReactElement {
         setOrgs(result);
         setOrganizations(result);
       })
-      .catch((err) => setError((err as Error).message || "Failed to load organizations"))
+      .catch((err) =>
+        setError((err as Error).message || "Failed to load organizations"),
+      )
       .finally(() => setLoading(false));
   }, [location.state, setOrganizations]);
 
@@ -55,10 +58,14 @@ export function OrgPickerPage(): React.ReactElement {
     setSwitchingId(orgId);
     setError("");
     try {
-      const newToken = await switchOrganization(orgId);
-      setToken(newToken);
+      const result = await switchOrganization(orgId);
+      setToken(result.token);
       setCurrentOrgId(orgId);
-      navigate("/", { replace: true });
+      if ("mfaEnrollmentRequired" in result) {
+        navigate("/mfa-setup", { replace: true });
+      } else {
+        navigate("/", { replace: true });
+      }
     } catch (err) {
       setError((err as Error).message || "Failed to switch organization");
       setSwitchingId(null);
@@ -90,7 +97,10 @@ export function OrgPickerPage(): React.ReactElement {
           <div className="px-4 py-4 space-y-2">
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 size={20} className="animate-spin text-muted-foreground" />
+                <Loader2
+                  size={20}
+                  className="animate-spin text-muted-foreground"
+                />
               </div>
             ) : orgs.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
@@ -124,9 +134,15 @@ export function OrgPickerPage(): React.ReactElement {
                     {org.role}
                   </span>
                   {switchingId === org.id ? (
-                    <Loader2 size={14} className="animate-spin text-muted-foreground shrink-0" />
+                    <Loader2
+                      size={14}
+                      className="animate-spin text-muted-foreground shrink-0"
+                    />
                   ) : (
-                    <ChevronRight size={14} className="text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <ChevronRight
+                      size={14}
+                      className="text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    />
                   )}
                 </motion.button>
               ))

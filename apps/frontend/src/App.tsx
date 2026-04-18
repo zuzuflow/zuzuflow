@@ -10,8 +10,13 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
 import { OrgPickerPage } from "./pages/OrgPickerPage";
+import { MfaEnrollmentPage } from "./pages/MfaEnrollmentPage";
 
-function AuthGuard({ children }: { children: React.ReactElement }): React.ReactElement {
+function AuthGuard({
+  children,
+}: {
+  children: React.ReactElement;
+}): React.ReactElement {
   const isAuthenticated = useApiConfigStore((s) => s.isAuthenticated);
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return children;
@@ -24,6 +29,14 @@ export default function App(): React.ReactElement {
         {/* Public */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route
+          path="/mfa-setup"
+          element={
+            <AuthGuard>
+              <MfaEnrollmentPage />
+            </AuthGuard>
+          }
+        />
 
         {/* Authenticated but no org selected yet */}
         <Route path="/org-picker" element={<OrgPickerPage />} />

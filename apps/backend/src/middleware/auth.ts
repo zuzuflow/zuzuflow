@@ -18,10 +18,16 @@ import { apiTokenService } from "../services/ApiTokenService";
  *   ALL  /api/webhooks/inbound/*  (HMAC-verified)
  *   ALL  /internal/*
  */
-export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   const authHeader = req.headers["authorization"] as string | undefined;
   const queryToken = req.query["token"] as string | undefined;
-  const raw = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : queryToken;
+  const raw = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : queryToken;
 
   if (!raw) {
     res.status(401).json({ error: "Unauthorized — missing token" });
@@ -46,14 +52,22 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   // 2. JWT
   if (!raw.startsWith("wf_")) {
     try {
-      const decoded = jwt.verify(raw, config.JWT_SECRET) as { sub: string; role?: string; orgId?: string };
+      const decoded = jwt.verify(raw, config.JWT_SECRET) as {
+        sub: string;
+        role?: string;
+        orgId?: string;
+        mfaEnrollmentOnly?: boolean;
+      };
       (req as any).userId = decoded.sub;
       (req as any).userRole = decoded.role ?? "editor";
       (req as any).organizationId = decoded.orgId ?? null;
+      (req as any).mfaEnrollmentOnly = !!decoded.mfaEnrollmentOnly;
       next();
       return;
     } catch {
-      res.status(401).json({ error: "Unauthorized — invalid or expired token" });
+      res
+        .status(401)
+        .json({ error: "Unauthorized — invalid or expired token" });
       return;
     }
   }

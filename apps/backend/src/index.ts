@@ -18,6 +18,7 @@ import { gitRouter } from "./routes/git";
 import { authRouter } from "./routes/auth";
 import { environmentRouter } from "./routes/environments";
 import { requireAuth } from "./middleware/auth";
+import { requireMfaEnrollmentComplete } from "./middleware/requireMfaEnrollmentComplete";
 import { resolveEnvironment } from "./middleware/resolveEnvironment";
 import { attachWebSocketServer } from "./ws/executionBroadcaster";
 import { userService } from "./services/UserService";
@@ -40,9 +41,14 @@ app.use(
   cors({
     origin: config.CORS_ORIGINS,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Webhook-Signature", "X-Hub-Signature-256"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Webhook-Signature",
+      "X-Hub-Signature-256",
+    ],
     credentials: true,
-  })
+  }),
 );
 
 // Parse JSON bodies — but preserve the raw body for webhook signature verification
@@ -51,7 +57,7 @@ app.use(
     verify: (req, _res, buf) => {
       (req as any).rawBody = buf;
     },
-  })
+  }),
 );
 app.use(express.urlencoded({ extended: true }));
 
@@ -81,6 +87,7 @@ app.use("/internal", internalRouter);
 // ---------------------------------------------------------------------------
 
 app.use("/api", requireAuth);
+app.use("/api", requireMfaEnrollmentComplete);
 
 // Global routes (not environment-scoped)
 app.use("/api/environments", environmentRouter);
@@ -114,11 +121,11 @@ app.use(
     err: Error,
     _req: express.Request,
     res: express.Response,
-    _next: express.NextFunction
+    _next: express.NextFunction,
   ) => {
     logger.error("Unhandled error", { err });
     res.status(500).json({ error: "Internal server error" });
-  }
+  },
 );
 
 // =============================================================================
@@ -141,7 +148,7 @@ server.listen(config.PORT, async () => {
   });
   // Seed initial admin user if the users table is empty
   await userService.ensureAdminExists().catch((err) =>
-    logger.error("Failed to seed admin user", { err })
+    logger.error("Failed to seed admin user", { err }),
   );
 
   // Kick off the auto-pull interval. The interval no-ops whenever the git

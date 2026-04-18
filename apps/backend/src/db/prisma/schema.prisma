@@ -51,14 +51,15 @@ enum HttpMethod {
 // -----------------------------------------------------------------------------
 
 model Organization {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   name        String
-  slug        String    @unique
+  slug        String   @unique
   address     String?             // org address / billing address
-  status      String    @default("active") // "active" | "suspended" | "deleted"
+  status      String   @default("active") // "active" | "suspended" | "deleted"
   suspendedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  mfaEnforced Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   members      OrgMember[]
   environments Environment[]
@@ -269,11 +270,37 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  // MFA fields
+  mfaTotpEnabled    Boolean  @default(false)
+  mfaTotpSecret     String?                 // encrypted TOTP secret
+  mfaEmailEnabled   Boolean  @default(false)
+  mfaBackupCodes    String[] @default([])   // hashed backup codes
+
   apiTokens    ApiToken[]
   environments UserEnvironment[]
   orgMembers   OrgMember[]
+  mfaChallenges MfaChallenge[]
 
   @@map("users")
+}
+
+// -----------------------------------------------------------------------------
+// MfaChallenge — short-lived OTP challenge (email 2FA or login step)
+// -----------------------------------------------------------------------------
+
+model MfaChallenge {
+  id          String   @id @default(uuid())
+  userId      String
+  type        String                        // "email_otp" | "login_pending"
+  codeHash    String                        // SHA-256 of the OTP code
+  expiresAt   DateTime
+  used        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("mfa_challenges")
 }
 
 // -----------------------------------------------------------------------------

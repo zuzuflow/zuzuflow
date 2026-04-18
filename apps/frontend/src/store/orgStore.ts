@@ -13,6 +13,7 @@ export interface OrgItem {
   name: string;
   slug: string;
   role: string;
+  mfaEnforced?: boolean;
   createdAt: string;
 }
 
@@ -48,7 +49,8 @@ export const useOrgStore = create<OrgState>()(
       },
 
       setCurrentOrgId: (id) => set({ currentOrgId: id }),
-      clear: () => set({ organizations: [], currentOrgId: null, loaded: false }),
+      clear: () =>
+        set({ organizations: [], currentOrgId: null, loaded: false }),
     }),
     {
       name: "wf-org",
@@ -59,8 +61,8 @@ export const useOrgStore = create<OrgState>()(
           state.loaded = false;
         }
       },
-    }
-  )
+    },
+  ),
 );
 
 // Non-hook accessor for use inside api.ts (outside React components)

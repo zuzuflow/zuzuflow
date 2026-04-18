@@ -63,6 +63,17 @@ const envSchema = z.object({
     .transform((v) => v !== "false")
     .default("true"),
 
+  // MFA
+  // 32-byte (64 hex char) key for AES-256 encryption of TOTP secrets.
+  // Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  MFA_ENCRYPTION_KEY: z
+    .string()
+    .length(64)
+    .default(
+      "0000000000000000000000000000000000000000000000000000000000000000",
+    ),
+  MFA_ISSUER: z.string().default("ZuzuFlow"),
+
   // Logging
   LOG_LEVEL: z
     .enum(["error", "warn", "info", "http", "verbose", "debug", "silly"])
@@ -74,7 +85,7 @@ function parseEnv() {
   if (!result.success) {
     console.error(
       "❌  Invalid environment variables:\n",
-      result.error.flatten().fieldErrors
+      result.error.flatten().fieldErrors,
     );
     process.exit(1);
   }
