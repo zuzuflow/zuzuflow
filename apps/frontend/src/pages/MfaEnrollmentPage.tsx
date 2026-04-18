@@ -1,6 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, Mail, Loader2, CheckCircle2, LogOut } from "lucide-react";
+import {
+  Shield,
+  Mail,
+  Loader2,
+  CheckCircle2,
+  LogOut,
+  Copy,
+  AlertTriangle,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +40,7 @@ export function MfaEnrollmentPage(): React.ReactElement {
 
   const [emailLoading, setEmailLoading] = useState(false);
   const [enrolled, setEnrolled] = useState(false);
+  const [backupCodes, setBackupCodes] = useState<string[] | null>(null);
 
   const refreshStatus = async () => {
     const status = await getMfaStatus();
@@ -78,7 +87,8 @@ export function MfaEnrollmentPage(): React.ReactElement {
     setError("");
     setTotpLoading(true);
     try {
-      await enableTotp(totpCode.trim());
+      const { backupCodes: codes } = await enableTotp(totpCode.trim());
+      setBackupCodes(codes);
       setTotpSetupData(null);
       setTotpCode("");
       await refreshStatus();
@@ -217,6 +227,39 @@ export function MfaEnrollmentPage(): React.ReactElement {
                 <div className="flex items-center gap-2 text-sm text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
                   <CheckCircle2 size={14} />
                   {statusMsg}
+                </div>
+              )}
+
+              {backupCodes && (
+                <div className="border border-amber-500/30 bg-amber-500/10 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-amber-500">
+                    <AlertTriangle size={14} />
+                    Save your backup codes
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Store these in a safe place. Each code can only be used
+                    once.
+                  </p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {backupCodes.map((code) => (
+                      <code
+                        key={code}
+                        className="bg-muted rounded px-2 py-1 text-xs font-mono text-center tracking-widest"
+                      >
+                        {code}
+                      </code>
+                    ))}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      navigator.clipboard.writeText(backupCodes.join("\n"));
+                    }}
+                  >
+                    <Copy size={12} className="mr-2" /> Copy all codes
+                  </Button>
                 </div>
               )}
             </div>

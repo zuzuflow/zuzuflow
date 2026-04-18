@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import QRCode from "qrcode";
 import { prisma } from "../db/client";
 import { logger } from "../logger";
 import { emailService } from "./EmailService";
@@ -199,8 +200,11 @@ export class MfaService {
       data: { mfaTotpSecret: encryptedSecret, mfaTotpEnabled: false },
     });
 
-    // QR code via Google Charts (no external dependency)
-    const qrCodeUrl = `https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl=${encodeURIComponent(otpauthUrl)}`;
+    // Generate QR code as base64 data URL (no external service needed)
+    const qrCodeUrl = await QRCode.toDataURL(otpauthUrl, {
+      width: 200,
+      margin: 1,
+    });
 
     return { secret, otpauthUrl, qrCodeUrl };
   }
