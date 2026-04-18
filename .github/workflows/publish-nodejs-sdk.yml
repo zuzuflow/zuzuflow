@@ -35,6 +35,13 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: pnpm
 
+      - name: Configure npm auth
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          echo "@zuzuflow:registry=https://registry.npmjs.org/" >> ~/.npmrc
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
@@ -55,4 +62,5 @@ jobs:
       - name: Publish to npm
         run: pnpm --filter @zuzuflow/nodejs-sdk publish --access public --no-git-checks --provenance
         env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

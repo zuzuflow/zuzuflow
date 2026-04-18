@@ -12,9 +12,16 @@ export const environmentRouter: import("express").Router = Router();
 function errStatus(err: unknown) {
   const code = (err as any)?.code;
   if (code === "NOT_FOUND") return 404;
+  if (code === "FORBIDDEN") return 403;
   if (code === "VALIDATION_ERROR") return 422;
   if (code === "CONFLICT") return 409;
   return 500;
+}
+
+// "admin" is the org-level admin role; "superadmin" is the system-wide role.
+// Superadmins implicitly have every admin power.
+function isAdmin(role: string | undefined | null): boolean {
+  return role === "admin" || role === "superadmin";
 }
 
 // GET /api/environments — list environments the current user has access to
@@ -23,8 +30,8 @@ environmentRouter.get("/", async (req: Request, res: Response) => {
     const userId = (req as any).userId as string | null;
     const userRole = (req as any).userRole as string;
     const organizationId = (req as any).organizationId as string | null;
-    // Admins or API tokens see all environments; regular users see only their own
-    const envs = userRole === "admin"
+    // Admins/superadmins or API tokens see all environments; regular users see only their own
+    const envs = isAdmin(userRole)
       ? await environmentService.listEnvironments(undefined, organizationId ?? undefined)
       : await environmentService.listEnvironments(userId ?? undefined, organizationId ?? undefined);
     res.json(envs);
@@ -38,7 +45,7 @@ environmentRouter.get("/", async (req: Request, res: Response) => {
 environmentRouter.post("/", async (req: Request, res: Response) => {
   try {
     const userRole = (req as any).userRole as string;
-    if (userRole !== "admin") {
+    if (!isAdmin(userRole)) {
       return res.status(403).json({ error: "Only admins can create environments" });
     }
 
@@ -69,7 +76,7 @@ environmentRouter.post("/", async (req: Request, res: Response) => {
 environmentRouter.put("/:id", async (req: Request, res: Response) => {
   try {
     const userRole = (req as any).userRole as string;
-    if (userRole !== "admin") {
+    if (!isAdmin(userRole)) {
       return res.status(403).json({ error: "Only admins can update environments" });
     }
 
@@ -86,7 +93,7 @@ environmentRouter.put("/:id", async (req: Request, res: Response) => {
 environmentRouter.delete("/:id", async (req: Request, res: Response) => {
   try {
     const userRole = (req as any).userRole as string;
-    if (userRole !== "admin") {
+    if (!isAdmin(userRole)) {
       return res.status(403).json({ error: "Only admins can delete environments" });
     }
 
@@ -117,7 +124,7 @@ environmentRouter.get("/:id/members", async (req: Request, res: Response) => {
 environmentRouter.post("/:id/members", async (req: Request, res: Response) => {
   try {
     const userRole = (req as any).userRole as string;
-    if (userRole !== "admin") {
+    if (!isAdmin(userRole)) {
       return res.status(403).json({ error: "Only admins can manage environment members" });
     }
 
@@ -136,7 +143,7 @@ environmentRouter.post("/:id/members", async (req: Request, res: Response) => {
 environmentRouter.put("/:id/members/:memberId", async (req: Request, res: Response) => {
   try {
     const userRole = (req as any).userRole as string;
-    if (userRole !== "admin") {
+    if (!isAdmin(userRole)) {
       return res.status(403).json({ error: "Only admins can manage environment members" });
     }
 
@@ -155,7 +162,7 @@ environmentRouter.put("/:id/members/:memberId", async (req: Request, res: Respon
 environmentRouter.delete("/:id/members/:memberId", async (req: Request, res: Response) => {
   try {
     const userRole = (req as any).userRole as string;
-    if (userRole !== "admin") {
+    if (!isAdmin(userRole)) {
       return res.status(403).json({ error: "Only admins can manage environment members" });
     }
 

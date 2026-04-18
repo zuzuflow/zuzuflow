@@ -73,13 +73,29 @@ pipeline {
                     kubectl rollout status deployment/frontend -n ${NAMESPACE} --timeout=60s
                 """
             }
+            // Roll back ONLY when the deploy itself fails (bad image, crashloop, timeout).
+            // Verify-stage failures below don't trigger this — infra/DNS/SSL issues
+            // shouldn't revert a healthy pod.
+            post {
+                failure {
+                    echo "Deploy stage failed for #${BUILD_NUMBER} — rolling back deployments"
+                    sh """
+                        kubectl rollout undo deployment/backend -n ${NAMESPACE} || true
+                        kubectl rollout undo deployment/workers -n ${NAMESPACE} || true
+                        kubectl rollout undo deployment/frontend -n ${NAMESPACE} || true
+                    """
+                }
+            }
         }
 
         stage('Verify') {
             steps {
+                // Check the NodePort directly. External URL checks don't work from the
+                // Jenkins agent on this host (hairpin NAT); external reachability is
+                // covered by separate uptime monitoring.
                 sh """
                     sleep 10
-                    curl -sf https://app.zuzuflow.com/health || (echo "Backend health check failed!" && exit 1)
+                    curl -sf http://localhost:30001/health || (echo "Backend health check failed!" && exit 1)
                     echo "All health checks passed!"
                 """
             }
@@ -92,12 +108,6 @@ pipeline {
         }
         failure {
             echo "Deployment #${BUILD_NUMBER} failed!"
-            // Rollback on failure
-            sh """
-                kubectl rollout undo deployment/backend -n ${NAMESPACE} || true
-                kubectl rollout undo deployment/workers -n ${NAMESPACE} || true
-                kubectl rollout undo deployment/frontend -n ${NAMESPACE} || true
-            """
         }
         always {
             // Clean up old Docker images to save disk space

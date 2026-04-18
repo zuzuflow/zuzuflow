@@ -14,6 +14,7 @@ const JWT_EXPIRY = "8h";
 function errStatus(err: unknown) {
   const code = (err as any)?.code;
   if (code === "NOT_FOUND") return 404;
+  if (code === "FORBIDDEN") return 403;
   if (code === "VALIDATION_ERROR") return 422;
   if (code === "CONFLICT") return 409;
   return 500;
@@ -207,7 +208,9 @@ authRouter.put("/users/:id/password", requireAuth, async (req: Request, res: Res
 // DELETE /api/auth/users/:id
 authRouter.delete("/users/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    await userService.deleteUser(req.params.id);
+    const actorId = (req as any).userId as string;
+    const actorRole = (req as any).userRole as string;
+    await userService.deleteUser(req.params.id, { id: actorId, role: actorRole });
     res.status(204).send();
   } catch (err) { res.status(errStatus(err)).json({ error: (err as Error).message }); }
 });
