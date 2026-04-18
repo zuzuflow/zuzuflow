@@ -117,32 +117,32 @@ export class GitService {
   }
 
   /**
-   * Verify that the credentials can reach the remote with WRITE access.
+   * Verify that the credentials can reach the remote AND actually push.
    *
    * Strategy:
-   *   1. `git ls-remote` proves the URL is reachable AND the token can read.
-   *      Fails fast on typos, bad tokens, wrong branch, network issues.
-   *   2. Provider API check for write permission — tokens can be read-only,
-   *      and ls-remote can't tell. For GitHub/GitLab we call their REST API
-   *      and inspect the `push` / `maintainer_access` flag. For other
-   *      providers we fall back to ls-remote only and note the caveat.
+   *   1. `git ls-remote` — cheap reachability + read check.
+   *   2. `git push --dry-run` into an isolated scratch repo — this triggers
+   *      the SAME server-side permission check as a real push (including
+   *      token scopes, SSO authorization, branch protection) but uploads no
+   *      objects. Only a successful dry-run proves write access.
    *
-   * Throws `AUTH_FAILED` / `REPO_NOT_FOUND` / `NO_WRITE_ACCESS` errors that
-   * the route handler can translate to a user-friendly 400 response.
+   * Provider-API heuristics were removed because `permissions.push` from
+   * GitHub's /repos endpoint reflects the USER's permission, not the
+   * TOKEN's. A fine-grained PAT without `Contents: Write` would pass the
+   * API check but fail the real push. The dry-run is the only authoritative
+   * signal.
    */
   async verifyAccess(cfg: GitConfig): Promise<{ ok: true; writeConfirmed: boolean; message: string }> {
-    // 1. Basic reachability + read check via `git ls-remote`
     const authUrl = buildAuthUrl(cfg);
-    const dir = repoDir();
-    mkdirp(dir);
-    const git = simpleGit(dir);
+
+    // 1. Reachability + read
     try {
-      // Short timeout — remote should answer quickly or we bail
-      await git.listRemote([authUrl]);
+      const readGit = simpleGit();
+      await readGit.listRemote([authUrl]);
     } catch (err) {
       const msg = (err as Error).message || "";
       if (/Authentication failed|401|Invalid username or password|could not read Username/i.test(msg)) {
-        throw Object.assign(new Error("Authentication failed — token is invalid or missing required scopes"), {
+        throw Object.assign(new Error("Authentication failed — token is invalid, expired, or not authorized (SSO?)"), {
           code: "AUTH_FAILED",
         });
       }
@@ -154,86 +154,46 @@ export class GitService {
       throw Object.assign(new Error(`Could not reach remote: ${msg.split("\n")[0]}`), { code: "CONNECT_FAILED" });
     }
 
-    // 2. Provider-specific write-permission probe
-    if (cfg.provider === "github") {
-      const writeOk = await this._verifyGithubWrite(cfg);
-      if (!writeOk) {
-        throw Object.assign(new Error("Token has read access but NOT write access. Grant 'Contents: Read and write' (or the classic `repo` scope)."), {
-          code: "NO_WRITE_ACCESS",
-        });
-      }
-      return { ok: true, writeConfirmed: true, message: "Verified — token has write access" };
-    }
-
-    if (cfg.provider === "gitlab") {
-      const writeOk = await this._verifyGitlabWrite(cfg);
-      if (!writeOk) {
-        throw Object.assign(new Error("Token has read access but NOT write access. Needs the `write_repository` scope and Developer+ role."), {
-          code: "NO_WRITE_ACCESS",
-        });
-      }
-      return { ok: true, writeConfirmed: true, message: "Verified — token has write access" };
-    }
-
-    // Bitbucket / custom — we can't cheaply check write permission without a
-    // real push. Return OK but flag it so the UI can warn.
-    return {
-      ok: true,
-      writeConfirmed: false,
-      message: "Verified reachable & readable. Write access will be confirmed on first push.",
-    };
-  }
-
-  /** Call the GitHub REST API to check if the token has push permission.
-   *  Returns false on any auth/permissions issue, true only on an explicit
-   *  `push: true` in the response. */
-  private async _verifyGithubWrite(cfg: GitConfig): Promise<boolean> {
+    // 2. Real write check — dry-run push from a scratch repo
+    const verifyDir = path.join(repoDir(), ".verify-" + Date.now());
     try {
-      // Parse owner/repo from URL. Accepts https://github.com/org/repo(.git)
-      const url = new URL(cfg.repoUrl);
-      const parts = url.pathname.replace(/^\//, "").replace(/\.git$/, "").split("/");
-      if (parts.length < 2) return false;
-      const [owner, repo] = parts;
-
-      const apiUrl = `https://api.github.com/repos/${owner}/${repo}`;
-      const res = await fetch(apiUrl, {
-        headers: {
-          "Accept": "application/vnd.github+json",
-          "Authorization": `Bearer ${cfg.token}`,
-          "X-GitHub-Api-Version": "2022-11-28",
-        },
-      });
-      if (!res.ok) return false;
-      const body = (await res.json()) as { permissions?: { push?: boolean; admin?: boolean; maintain?: boolean } };
-      return !!(body.permissions?.push || body.permissions?.admin || body.permissions?.maintain);
+      mkdirp(verifyDir);
+      const git = simpleGit(verifyDir);
+      await git.init();
+      await git.addConfig("user.name", "ZuzuFlow Verify");
+      await git.addConfig("user.email", "verify@zuzuflow.com");
+      // Empty commit so we have something to push as a ref
+      await git.raw(["commit", "--allow-empty", "--no-gpg-sign", "-m", "verify-access"]);
+      // Dry-run push to a nonsensical ref so even on success we don't
+      // actually create anything on the remote. The server still runs
+      // permission checks on it.
+      await git.push([
+        "--dry-run",
+        "--force",
+        authUrl,
+        `HEAD:refs/heads/__zuzuflow_verify__`,
+      ]);
     } catch (err) {
-      logger.warn("GitHub write-permission probe failed", { err });
-      return false;
+      const msg = (err as Error).message || "";
+      if (/403|permission denied|not granted|forbidden|remote rejected/i.test(msg)) {
+        throw Object.assign(
+          new Error(
+            "Token can read but cannot push. For GitHub: grant 'Contents: Read and write' on a fine-grained PAT (or the classic `repo` scope), and authorize SSO for the org if required.",
+          ),
+          { code: "NO_WRITE_ACCESS" },
+        );
+      }
+      // Any other dry-run failure is unexpected — surface the first line
+      throw Object.assign(
+        new Error(`Write-access check failed: ${msg.split("\n")[0]}`),
+        { code: "VERIFY_FAILED" },
+      );
+    } finally {
+      // Always clean up the scratch dir, even on failure
+      try { fs.rmSync(verifyDir, { recursive: true, force: true }); } catch { /* best-effort */ }
     }
-  }
 
-  /** Call the GitLab REST API. Needs the `read_api` scope at minimum; if the
-   *  token can't even call this endpoint we assume no write access. */
-  private async _verifyGitlabWrite(cfg: GitConfig): Promise<boolean> {
-    try {
-      const url = new URL(cfg.repoUrl);
-      const projectPath = url.pathname.replace(/^\//, "").replace(/\.git$/, "");
-      const apiUrl = `${url.origin}/api/v4/projects/${encodeURIComponent(projectPath)}`;
-      const res = await fetch(apiUrl, {
-        headers: { "PRIVATE-TOKEN": cfg.token },
-      });
-      if (!res.ok) return false;
-      const body = (await res.json()) as { permissions?: { project_access?: { access_level?: number }; group_access?: { access_level?: number } } };
-      // GitLab access levels: Developer=30, Maintainer=40, Owner=50 — any of these can push
-      const levels = [
-        body.permissions?.project_access?.access_level ?? 0,
-        body.permissions?.group_access?.access_level ?? 0,
-      ];
-      return levels.some((l) => l >= 30);
-    } catch (err) {
-      logger.warn("GitLab write-permission probe failed", { err });
-      return false;
-    }
+    return { ok: true, writeConfirmed: true, message: "Verified — token can push to this repository" };
   }
 
   /** Current sync status (last push/pull timestamps). */
@@ -324,26 +284,47 @@ export class GitService {
 
     await git.add(".");
     const status = await git.status();
-    if (status.isClean()) {
-      return { committed: 0, message: "Nothing to commit — already up to date" };
+
+    // Only create a commit if the working tree actually changed. But ALWAYS
+    // attempt the push afterwards — a previous failed push (bad token, etc.)
+    // may have left unpushed commits on the local branch that still need to
+    // go out. Skipping the push just because the working tree is clean would
+    // silently strand those commits.
+    let newCommit = false;
+    if (!status.isClean()) {
+      const ts = new Date().toISOString();
+      await git.commit(`chore: export ${workflows.length} workflow(s) [${ts}]`);
+      newCommit = true;
     }
 
-    const ts = new Date().toISOString();
-    await git.commit(`chore: export ${workflows.length} workflow(s) [${ts}]`);
-
+    // Push (remote may be behind even if no new local commit this run).
+    let pushOutput: { pushed?: Array<{ alreadyUpdated?: boolean }> } | null = null;
     try {
-      await git.push("origin", cfg.branch, { "--set-upstream": null });
+      pushOutput = await git.push("origin", cfg.branch, { "--set-upstream": null }) as any;
     } catch {
       // Branch may not exist on remote yet — force-push
-      await git.push(["origin", `HEAD:${cfg.branch}`, "--force"]);
+      pushOutput = await git.push(["origin", `HEAD:${cfg.branch}`, "--force"]) as any;
     }
+
+    // Detect the "already up-to-date" case from simple-git's parsed output
+    const alreadyUpToDate = !!pushOutput?.pushed?.every((p) => p.alreadyUpdated);
 
     await settingService.set("git.meta", {
       ...(await settingService.get("git.meta") as object ?? {}),
       lastPush: new Date().toISOString(),
     });
 
-    logger.info(`Git push: ${workflows.length} workflows → ${cfg.repoUrl} (${cfg.branch})`);
+    logger.info(
+      `Git push: ${workflows.length} workflows → ${cfg.repoUrl} (${cfg.branch}) ` +
+      `[newCommit=${newCommit}, alreadyUpToDate=${alreadyUpToDate}]`,
+    );
+
+    if (alreadyUpToDate && !newCommit) {
+      return { committed: 0, message: "Already up to date — nothing to push" };
+    }
+    if (!newCommit) {
+      return { committed: 0, message: `Pushed existing commits to ${cfg.branch}` };
+    }
     return { committed: workflows.length, message: `Pushed ${workflows.length} workflows to ${cfg.branch}` };
   }
 
