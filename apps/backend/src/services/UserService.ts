@@ -29,7 +29,12 @@ export class UserService {
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
     const user = await prisma.user.create({
-      data: { username, email: `${username}@admin.local`, passwordHash, role: "superadmin" },
+      data: {
+        username,
+        email: `${username}@admin.local`,
+        passwordHash,
+        role: "superadmin",
+      },
     });
     logger.info(`Created initial superadmin user: ${username}`);
 
@@ -128,14 +133,24 @@ export class UserService {
       const existingCount = await tx.user.count();
       const role = existingCount === 0 ? "superadmin" : "editor";
       return tx.user.create({
-        data: { username: username.trim(), email: email.trim().toLowerCase(), passwordHash, role },
+        data: {
+          username: username.trim(),
+          email: email.trim().toLowerCase(),
+          passwordHash,
+          role,
+        },
       });
     });
 
     if (user.role === "superadmin") {
-      logger.info("First user signed up — assigned superadmin role", { userId: user.id });
+      logger.info("First user signed up — assigned superadmin role", {
+        userId: user.id,
+      });
     } else {
-      logger.info("User signed up", { userId: user.id, username: user.username });
+      logger.info("User signed up", {
+        userId: user.id,
+        username: user.username,
+      });
     }
 
     // Create a personal org for the new user (named after username)
@@ -238,28 +253,48 @@ export class UserService {
     actor: { id: string; role: string },
   ): Promise<void> {
     if (actor.id === id) {
-      throw Object.assign(new Error("You cannot delete your own account"), { code: "VALIDATION_ERROR" });
+      throw Object.assign(new Error("You cannot delete your own account"), {
+        code: "VALIDATION_ERROR",
+      });
     }
 
-    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true } });
-    if (!target) throw Object.assign(new Error("User not found"), { code: "NOT_FOUND" });
+    const target = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, role: true },
+    });
+    if (!target)
+      throw Object.assign(new Error("User not found"), { code: "NOT_FOUND" });
 
     if (target.role === "superadmin" && actor.role !== "superadmin") {
-      throw Object.assign(new Error("Only a superadmin can delete a superadmin"), { code: "FORBIDDEN" });
+      throw Object.assign(
+        new Error("Only a superadmin can delete a superadmin"),
+        { code: "FORBIDDEN" },
+      );
     }
 
     const remaining = await prisma.user.count();
-    if (remaining <= 1) throw Object.assign(new Error("Cannot delete the last user"), { code: "VALIDATION_ERROR" });
+    if (remaining <= 1)
+      throw Object.assign(new Error("Cannot delete the last user"), {
+        code: "VALIDATION_ERROR",
+      });
 
     if (target.role === "superadmin") {
-      const remainingSuperadmins = await prisma.user.count({ where: { role: "superadmin" } });
+      const remainingSuperadmins = await prisma.user.count({
+        where: { role: "superadmin" },
+      });
       if (remainingSuperadmins <= 1) {
-        throw Object.assign(new Error("Cannot delete the last superadmin"), { code: "VALIDATION_ERROR" });
+        throw Object.assign(new Error("Cannot delete the last superadmin"), {
+          code: "VALIDATION_ERROR",
+        });
       }
     }
 
     await prisma.user.delete({ where: { id } });
-    logger.info("User deleted", { userId: id, actorId: actor.id, actorRole: actor.role });
+    logger.info("User deleted", {
+      userId: id,
+      actorId: actor.id,
+      actorRole: actor.role,
+    });
   }
 
   // Public wrapper so routes can convert raw Prisma rows to UserPublic

@@ -138,7 +138,7 @@ authRouter.post("/login", async (req: Request, res: Response) => {
     const effectiveRole =
       systemRole === "superadmin" || systemRole === "admin"
         ? systemRole
-        : membership?.role ?? systemRole;
+        : (membership?.role ?? systemRole);
     const token = jwt.sign(
       {
         sub: user.id,
@@ -155,7 +155,12 @@ authRouter.post("/login", async (req: Request, res: Response) => {
       role: effectiveRole,
       ip: req.ip,
     });
-    return res.json({ token, expiresIn: JWT_EXPIRY, user, organization: orgs[0] });
+    return res.json({
+      token,
+      expiresIn: JWT_EXPIRY,
+      user,
+      organization: orgs[0],
+    });
   }
 
   // Multiple orgs — return token without orgId, let client pick
@@ -232,9 +237,8 @@ authRouter.post("/signup", async (req: Request, res: Response) => {
     // The very first signup is a superadmin (see UserService.signup). Reflect
     // that in the JWT; otherwise fall back to "owner" for the new org they just
     // created.
-    const effectiveRole = user.role === "superadmin" || user.role === "admin"
-      ? user.role
-      : "owner";
+    const effectiveRole =
+      user.role === "superadmin" || user.role === "admin" ? user.role : "owner";
     const token = jwt.sign(
       {
         sub: user.id,
@@ -379,7 +383,11 @@ authRouter.post(
         { expiresIn: JWT_EXPIRY },
       );
 
-      logger.info("Org switch", { userId, organizationId, role: effectiveRole });
+      logger.info("Org switch", {
+        userId,
+        organizationId,
+        role: effectiveRole,
+      });
       return res.json({ token, expiresIn: JWT_EXPIRY });
     } catch (err) {
       return res.status(errStatus(err)).json({ error: (err as Error).message });
@@ -432,14 +440,23 @@ authRouter.put(
 );
 
 // DELETE /api/auth/users/:id
-authRouter.delete("/users/:id", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const actorId = (req as any).userId as string;
-    const actorRole = (req as any).userRole as string;
-    await userService.deleteUser(req.params.id, { id: actorId, role: actorRole });
-    res.status(204).send();
-  } catch (err) { res.status(errStatus(err)).json({ error: (err as Error).message }); }
-});
+authRouter.delete(
+  "/users/:id",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const actorId = (req as any).userId as string;
+      const actorRole = (req as any).userRole as string;
+      await userService.deleteUser(req.params.id, {
+        id: actorId,
+        role: actorRole,
+      });
+      res.status(204).send();
+    } catch (err) {
+      res.status(errStatus(err)).json({ error: (err as Error).message });
+    }
+  },
+);
 
 // ---------------------------------------------------------------------------
 // Organization management

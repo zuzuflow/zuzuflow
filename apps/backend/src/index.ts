@@ -147,9 +147,9 @@ server.listen(config.PORT, async () => {
     cors: config.CORS_ORIGINS,
   });
   // Seed initial admin user if the users table is empty
-  await userService.ensureAdminExists().catch((err) =>
-    logger.error("Failed to seed admin user", { err }),
-  );
+  await userService
+    .ensureAdminExists()
+    .catch((err) => logger.error("Failed to seed admin user", { err }));
 
   // Kick off the auto-pull interval. The interval no-ops whenever the git
   // config has autoPull disabled or credentials missing, so it's safe to

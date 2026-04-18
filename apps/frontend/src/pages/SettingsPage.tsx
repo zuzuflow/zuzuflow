@@ -93,7 +93,14 @@ import {
 } from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
 import { Switch } from "../components/ui/switch";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/ui/table";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -145,9 +152,9 @@ function GitTab() {
   const [token, setToken] = useState("");
   const [showToken, setShowToken] = useState(false);
   const [tokenMasked, setTokenMasked] = useState(false);
-  const [autoPush, setAutoPush]       = useState(false);
-  const [autoPull, setAutoPull]       = useState(false);
-  const [autoSaving, setAutoSaving]   = useState<"push" | "pull" | null>(null);
+  const [autoPush, setAutoPush] = useState(false);
+  const [autoPull, setAutoPull] = useState(false);
+  const [autoSaving, setAutoSaving] = useState<"push" | "pull" | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<{
@@ -203,7 +210,15 @@ function GitTab() {
     setSaving(true);
     setSaveResult(null);
     try {
-      await saveGitConfig({ provider, repoUrl: repoUrl.trim(), branch: branch.trim(), username: username.trim() || undefined, token, autoPush, autoPull });
+      await saveGitConfig({
+        provider,
+        repoUrl: repoUrl.trim(),
+        branch: branch.trim(),
+        username: username.trim() || undefined,
+        token,
+        autoPush,
+        autoPull,
+      });
       setTokenMasked(true);
       setSaveResult({ ok: true, msg: "Configuration saved." });
     } catch (err) {
@@ -218,7 +233,10 @@ function GitTab() {
    * button — feels more natural for toggles (take effect instantly). Optimistic
    * UI, rolls back on failure.
    */
-  async function persistAutoSync(field: "autoPush" | "autoPull", value: boolean) {
+  async function persistAutoSync(
+    field: "autoPush" | "autoPull",
+    value: boolean,
+  ) {
     // Require the rest of the config to be saved before toggles take effect.
     if (!gitStatus?.configured) {
       toast.error("Save Git configuration first, then enable auto-sync.");
@@ -226,7 +244,8 @@ function GitTab() {
     }
     const prev = field === "autoPush" ? autoPush : autoPull;
     // Optimistic update
-    if (field === "autoPush") setAutoPush(value); else setAutoPull(value);
+    if (field === "autoPush") setAutoPush(value);
+    else setAutoPull(value);
     setAutoSaving(field === "autoPush" ? "push" : "pull");
     try {
       await saveGitConfig({
@@ -241,7 +260,8 @@ function GitTab() {
       setTokenMasked(true);
     } catch (err) {
       // Rollback
-      if (field === "autoPush") setAutoPush(prev); else setAutoPull(prev);
+      if (field === "autoPush") setAutoPush(prev);
+      else setAutoPull(prev);
       toast.error((err as Error).message);
     } finally {
       setAutoSaving(null);
@@ -450,10 +470,13 @@ function GitTab() {
           {/* Auto-sync toggles */}
           <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-medium text-foreground mb-0.5">Auto-push on change</p>
+              <p className="text-xs font-medium text-foreground mb-0.5">
+                Auto-push on change
+              </p>
               <p className="text-xs text-muted-foreground">
-                Automatically push to Git whenever a workflow is created, updated, or deleted.
-                Rapid saves are batched into a single commit.
+                Automatically push to Git whenever a workflow is created,
+                updated, or deleted. Rapid saves are batched into a single
+                commit.
               </p>
             </div>
             <Switch
@@ -465,9 +488,12 @@ function GitTab() {
           </div>
           <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-medium text-foreground mb-0.5">Auto-pull periodically</p>
+              <p className="text-xs font-medium text-foreground mb-0.5">
+                Auto-pull periodically
+              </p>
               <p className="text-xs text-muted-foreground">
-                Pull the latest workflows from Git every 5 minutes and upsert into the database.
+                Pull the latest workflows from Git every 5 minutes and upsert
+                into the database.
               </p>
             </div>
             <Switch
