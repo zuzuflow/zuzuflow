@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { workflowService } from "../services/WorkflowService";
+import { gitService } from "../services/GitService";
 import { prisma } from "../db/client";
 import { logger } from "../logger";
 
@@ -118,6 +119,7 @@ workflowRouter.post("/", async (req: Request, res: Response) => {
       key,
     });
 
+    gitService.scheduleAutoPush(`workflow.create:${workflow.id}`);
     res.status(201).json(workflow);
   } catch (err) {
     logger.error("POST /workflows error", { err });
@@ -164,6 +166,7 @@ workflowRouter.put("/:id", async (req: Request, res: Response) => {
       key,
     });
 
+    gitService.scheduleAutoPush(`workflow.update:${workflow.id}`);
     res.json(workflow);
   } catch (err) {
     logger.error("PUT /workflows/:id error", { err, id: req.params.id });
@@ -180,6 +183,7 @@ workflowRouter.put("/:id", async (req: Request, res: Response) => {
 workflowRouter.delete("/:id", async (req: Request, res: Response) => {
   try {
     await workflowService.deleteWorkflow(req.params.id);
+    gitService.scheduleAutoPush(`workflow.delete:${req.params.id}`);
     res.status(204).send();
   } catch (err) {
     logger.error("DELETE /workflows/:id error", { err, id: req.params.id });

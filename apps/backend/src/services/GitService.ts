@@ -26,6 +26,11 @@ export interface GitConfig {
   branch: string;
   username?: string; // Required for Bitbucket basic auth
   token: string;     // PAT / app password / OAuth token
+
+  /** Push to git automatically after any workflow create/update/delete. */
+  autoPush?: boolean;
+  /** Pull from git on a periodic interval (see AUTO_PULL_INTERVAL_MS). */
+  autoPull?: boolean;
 }
 
 export interface GitStatus {
@@ -345,6 +350,63 @@ export class GitService {
 
     for (const f of folders) visit(f.id);
     return sorted;
+  }
+
+  // ─── Auto-sync helpers ──────────────────────────────────────────────────────
+  //
+  // autoPush is triggered by the workflow routes on every create/update/delete.
+  // Multiple saves in quick succession are collapsed into a single push via a
+  // short debounce window so a burst of edits results in one commit.
+
+  private _autoPushTimer: NodeJS.Timeout | null = null;
+  private _autoPullInterval: NodeJS.Timeout | null = null;
+
+  /** Schedule an auto-push if the feature is enabled and git is configured.
+   *  Returns immediately — the push runs asynchronously. */
+  scheduleAutoPush(reason: string): void {
+    // Debounce: collapse rapid successive saves into one push
+    const DEBOUNCE_MS = 3000;
+    if (this._autoPushTimer) clearTimeout(this._autoPushTimer);
+    this._autoPushTimer = setTimeout(() => {
+      this._autoPushTimer = null;
+      void this._runAutoPush(reason);
+    }, DEBOUNCE_MS);
+  }
+
+  private async _runAutoPush(reason: string): Promise<void> {
+    try {
+      const cfg = await this.getConfig();
+      if (!cfg?.autoPush) return;
+      if (!cfg.repoUrl || !cfg.token) return;
+      logger.info(`Auto-push triggered (${reason})`);
+      await this.push();
+    } catch (err) {
+      // Auto-push failure must not surface to the save request — just log it.
+      logger.error("Auto-push failed", { err });
+    }
+  }
+
+  /** Start a recurring auto-pull interval. Safe to call multiple times —
+   *  previous interval is cleared first. */
+  startAutoPullInterval(): void {
+    const AUTO_PULL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+    if (this._autoPullInterval) clearInterval(this._autoPullInterval);
+    this._autoPullInterval = setInterval(() => {
+      void this._runAutoPull();
+    }, AUTO_PULL_INTERVAL_MS);
+    logger.info(`Auto-pull interval started (${AUTO_PULL_INTERVAL_MS / 1000}s)`);
+  }
+
+  private async _runAutoPull(): Promise<void> {
+    try {
+      const cfg = await this.getConfig();
+      if (!cfg?.autoPull) return;
+      if (!cfg.repoUrl || !cfg.token) return;
+      logger.info("Auto-pull tick");
+      await this.pull();
+    } catch (err) {
+      logger.error("Auto-pull failed", { err });
+    }
   }
 }
 

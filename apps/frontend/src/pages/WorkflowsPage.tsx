@@ -2,11 +2,9 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useEnvironmentStore } from "@/store/environmentStore";
 import {
-  Plus, Play, Trash2, RefreshCw, GitBranch, Clock, CheckCircle2,
-  AlertCircle, History, KeyRound, Folder, FolderOpen, FolderPlus,
-  ChevronRight, ChevronDown, MoreHorizontal, Pencil,
-  ArrowRight, GitFork, LayoutGrid, FileText,
-  Activity, Timer, TrendingUp, XCircle, Zap, Tag,
+  Plus, RefreshCw, GitBranch, Clock, KeyRound, Folder, FolderOpen, FolderPlus,
+  ChevronRight, ChevronDown, MoreHorizontal, Pencil, Trash2, GitFork,
+  LayoutGrid, FileText, Tag, Search, X,
 } from "lucide-react";
 import { Skeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
@@ -17,64 +15,51 @@ import { cn } from "../lib/utils";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ExecutionLogViewer } from "@/components/panels/ExecutionLogViewer";
+import { WorkflowTable, type SortColumn, type SortDirection } from "../components/workflows/WorkflowTable";
+import { formatDate, formatDuration, executionStatusColor as statusColor, successRateNumber } from "../lib/formatters";
 
-// =============================================================================
-// Helpers
-// =============================================================================
+// Comparator used by the table's client-side sort. Nulls always sort last,
+// independent of direction, so a "—" row doesn't float to the top when sorting
+// descending.
+function compareWorkflows(
+  a: api.WorkflowListItem,
+  b: api.WorkflowListItem,
+  column: SortColumn,
+): number {
+  switch (column) {
+    case "name":
+      return a.name.localeCompare(b.name);
 
-function statusBadge(status: string) {
-  const map: Record<string, { label: string; cls: string }> = {
-    active:   { label: "Active",   cls: "bg-emerald-900 text-emerald-300" },
-    inactive: { label: "Inactive", cls: "bg-muted text-muted-foreground" },
-    draft:    { label: "Draft",    cls: "bg-amber-900 text-amber-300" },
-    archived: { label: "Archived", cls: "bg-secondary text-muted-foreground" },
-  };
-  const s = map[status] ?? { label: status, cls: "bg-muted text-muted-foreground" };
-  return <span className={cn("px-2 py-0.5 text-[10px] font-bold rounded uppercase", s.cls)}>{s.label}</span>;
-}
+    case "tags": {
+      const ta = (a.tags?.[0] ?? "").toLowerCase();
+      const tb = (b.tags?.[0] ?? "").toLowerCase();
+      if (!ta && !tb) return 0;
+      if (!ta) return 1;   // empty tags sink
+      if (!tb) return -1;
+      return ta.localeCompare(tb);
+    }
 
-function statusIcon(status: string) {
-  if (status === "active") return <CheckCircle2 size={14} className="text-emerald-400" />;
-  if (status === "draft") return <AlertCircle size={14} className="text-amber-400" />;
-  return <GitBranch size={14} className="text-muted-foreground" />;
-}
+    case "successRate": {
+      const ra = successRateNumber(a.stats);
+      const rb = successRateNumber(b.stats);
+      if (ra === rb) return 0;
+      if (ra === null) return 1;
+      if (rb === null) return -1;
+      return ra - rb;
+    }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-}
+    case "avgLatency": {
+      const la = a.stats?.avgDurationMs;
+      const lb = b.stats?.avgDurationMs;
+      if (la == null && lb == null) return 0;
+      if (la == null) return 1;
+      if (lb == null) return -1;
+      return la - lb;
+    }
 
-const statusColor: Record<string, string> = {
-  completed: "text-emerald-400", failed: "text-red-400", running: "text-indigo-400",
-  pending: "text-amber-400", cancelled: "text-muted-foreground", timed_out: "text-orange-400",
-};
-
-function formatDuration(ms: number | null | undefined): string {
-  if (ms == null) return "—";
-  if (ms < 1000) return `${ms}ms`;
-  const s = ms / 1000;
-  if (s < 60) return `${s.toFixed(3)}s`;
-  const m = Math.floor(s / 60);
-  const rem = (s % 60).toFixed(1);
-  return `${m}m ${rem}s`;
-}
-
-function formatRelative(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return "just now";
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d < 7) return `${d}d ago`;
-  return formatDate(iso);
-}
-
-function successRate(stats: api.WorkflowExecStats): string {
-  const total = stats.completed + stats.failed;
-  if (total === 0) return "—";
-  return `${Math.round((stats.completed / total) * 100)}%`;
+    case "modified":
+      return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+  }
 }
 
 // Build tree from flat folder list
@@ -254,17 +239,61 @@ interface FolderTreeProps {
   onRename: (id: string, currentName: string) => void;
   onDelete: (id: string, name: string) => void;
   onNewSubfolder: (parentId: string) => void;
+  /** All workflows across folders. Each folder node filters by folderId to
+   *  render its own workflow leaves. */
+  workflows: api.WorkflowListItem[];
+  onSelectWorkflow: (id: string) => void;
+  onDragStartWorkflow: (e: React.DragEvent, workflowId: string) => void;
+}
+
+/** Leaf row in the folder sidebar that represents a single workflow. */
+function WorkflowLeaf({
+  workflow,
+  depth,
+  onSelect,
+  onDragStart,
+}: {
+  workflow: api.WorkflowListItem;
+  depth: number;
+  onSelect: (id: string) => void;
+  onDragStart: (e: React.DragEvent, workflowId: string) => void;
+}) {
+  const isActive = workflow.status === "active";
+  return (
+    <div
+      draggable
+      onDragStart={(e) => onDragStart(e, workflow.id)}
+      onClick={() => onSelect(workflow.id)}
+      className="group flex items-center gap-1 pr-1 rounded cursor-pointer transition-colors select-none text-muted-foreground hover:bg-secondary hover:text-foreground"
+      style={{ paddingLeft: 8 + depth * 14 }}
+      title={workflow.name}
+    >
+      {/* Chevron column — empty for leaves, matches folder indent */}
+      <span className="w-4 shrink-0" />
+      <GitBranch
+        size={12}
+        className={cn("shrink-0", isActive ? "text-emerald-400" : "text-muted-foreground/60")}
+      />
+      <span className="flex-1 text-[11px] py-1 truncate">{workflow.name}</span>
+    </div>
+  );
 }
 
 function FolderTreeItem({
   node, depth, selectedId, onSelect, onRename, onDelete, onNewSubfolder,
+  workflows, onSelectWorkflow, onDragStartWorkflow,
 }: { node: FolderNode; depth: number } & FolderTreeProps) {
   const [expanded, setExpanded] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
   const isSelected = selectedId === node.id;
-  const hasChildren = node.children.length > 0;
+  // Workflows that live directly in this folder (sorted alphabetically for
+  // stable tree display — independent of the table's chosen sort).
+  const folderWorkflows = workflows
+    .filter((w) => w.folderId === node.id)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const hasChildren = node.children.length > 0 || folderWorkflows.length > 0;
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -343,19 +372,35 @@ function FolderTreeItem({
         </div>
       )}
 
-      {expanded && node.children.map((child) => (
-        <FolderTreeItem
-          key={child.id}
-          node={child}
-          depth={depth + 1}
-          selectedId={selectedId}
-          onSelect={onSelect}
-          onRename={onRename}
-          onDelete={onDelete}
-          onNewSubfolder={onNewSubfolder}
-          nodes={[]}
-        />
-      ))}
+      {expanded && (
+        <>
+          {node.children.map((child) => (
+            <FolderTreeItem
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              onRename={onRename}
+              onDelete={onDelete}
+              onNewSubfolder={onNewSubfolder}
+              nodes={[]}
+              workflows={workflows}
+              onSelectWorkflow={onSelectWorkflow}
+              onDragStartWorkflow={onDragStartWorkflow}
+            />
+          ))}
+          {folderWorkflows.map((wf) => (
+            <WorkflowLeaf
+              key={wf.id}
+              workflow={wf}
+              depth={depth + 1}
+              onSelect={onSelectWorkflow}
+              onDragStart={onDragStartWorkflow}
+            />
+          ))}
+        </>
+      )}
     </div>
   );
 }
@@ -397,6 +442,11 @@ export function WorkflowsPage(): React.ReactElement {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagMenuOpen, setTagMenuOpen] = useState(false);
 
+  // Search + sort
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>("modified");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+
   const loadAll = useCallback(() => {
     if (!currentSlug) return;
     setLoading(true);
@@ -417,9 +467,46 @@ export function WorkflowsPage(): React.ReactElement {
 
   const tree = buildTree(folders);
 
-  const visibleWorkflows = selectedFolderId === null
-    ? workflows  // All
-    : workflows.filter((w) => w.folderId === selectedFolderId);
+  const visibleWorkflows = React.useMemo(() => {
+    // 1. Filter by selected folder
+    let list = selectedFolderId === null
+      ? workflows
+      : workflows.filter((w) => w.folderId === selectedFolderId);
+
+    // 2. Filter by search query (name or id, case-insensitive substring)
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (w) => w.name.toLowerCase().includes(q) || w.id.toLowerCase().includes(q),
+      );
+    }
+
+    // 3. Sort
+    if (sortColumn) {
+      const dir = sortDirection === "asc" ? 1 : -1;
+      list = [...list].sort((a, b) => {
+        const cmp = compareWorkflows(a, b, sortColumn);
+        return cmp * dir;
+      });
+    }
+
+    return list;
+  }, [workflows, selectedFolderId, searchQuery, sortColumn, sortDirection]);
+
+  const handleSort = useCallback((column: SortColumn) => {
+    setSortColumn((prev) => {
+      if (prev === column) {
+        // Toggle direction
+        setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
+        return prev;
+      }
+      // Switch to new column — default to asc for text, desc for numbers/dates
+      const defaultDir: SortDirection =
+        column === "name" || column === "tags" ? "asc" : "desc";
+      setSortDirection(defaultDir);
+      return column;
+    });
+  }, []);
 
   // Breadcrumb
   const breadcrumb: string[] = [];
@@ -512,6 +599,15 @@ export function WorkflowsPage(): React.ReactElement {
     } catch (err) { toast.error(String(err)); }
   };
 
+  // Optimistic row-level status update driven by StatusToggle. The toggle
+  // component calls this BEFORE the API request (optimistic) and again with
+  // the rolled-back status if the request fails.
+  const handleStatusChange = useCallback((workflowId: string, nextStatus: string) => {
+    setWorkflows((prev) =>
+      prev.map((w) => (w.id === workflowId ? { ...w, status: nextStatus } : w))
+    );
+  }, []);
+
   // ── Main render ────────────────────────────────────────────────────────────
 
   return (
@@ -565,9 +661,26 @@ export function WorkflowsPage(): React.ReactElement {
                 onDelete={handleDeleteFolder}
                 onNewSubfolder={(parentId) => { setNewFolderParentId(parentId); setNewFolderName(""); }}
                 nodes={[]}
+                workflows={workflows}
+                onSelectWorkflow={(id) => navigate(`/editor/${id}`)}
+                onDragStartWorkflow={handleDragStart}
               />
             </div>
           ))}
+
+          {/* Root-level workflows (no folder) — appear as leaves at depth 0 */}
+          {workflows
+            .filter((w) => w.folderId === null)
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map((wf) => (
+              <WorkflowLeaf
+                key={wf.id}
+                workflow={wf}
+                depth={0}
+                onSelect={(id) => navigate(`/editor/${id}`)}
+                onDragStart={handleDragStart}
+              />
+            ))}
         </div>
       </aside>
 
@@ -620,14 +733,35 @@ export function WorkflowsPage(): React.ReactElement {
 
         {/* Workflow list */}
         <div className="flex-1 overflow-y-auto p-5">
-          {/* Count + Tag filter line */}
-          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-            <p className="text-[11px] text-muted-foreground">
-              {visibleWorkflows.length} workflow{visibleWorkflows.length !== 1 ? "s" : ""}
-              {selectedFolderId && folders.find((f) => f.id === selectedFolderId)
-                ? ` in "${folders.find((f) => f.id === selectedFolderId)!.name}"`
-                : ""}
-            </p>
+          {/* Search + count + tag filter.
+              Kept left-aligned so the right side stays clear — the
+              environment-switcher dropdown in TopNav opens downward into
+              that column and would overlap anything parked there. */}
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
+            {/* Prominent search bar */}
+            <div className="relative w-full max-w-sm">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+              />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by workflow name or ID"
+                className="w-full h-8 pl-9 pr-8 text-xs bg-secondary border border-border rounded-md text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-colors"
+                aria-label="Search workflows"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
+                  aria-label="Clear search"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
 
             <div className="relative">
               <button
@@ -690,6 +824,13 @@ export function WorkflowsPage(): React.ReactElement {
                 </div>
               )}
             </div>
+
+            <p className="text-[11px] text-muted-foreground">
+              {visibleWorkflows.length} workflow{visibleWorkflows.length !== 1 ? "s" : ""}
+              {selectedFolderId && folders.find((f) => f.id === selectedFolderId)
+                ? ` in "${folders.find((f) => f.id === selectedFolderId)!.name}"`
+                : ""}
+            </p>
           </div>
 
           {loading && workflows.length === 0 ? (
@@ -708,181 +849,53 @@ export function WorkflowsPage(): React.ReactElement {
           ) : visibleWorkflows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
               <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
-                <GitBranch size={24} className="opacity-40" />
+                {searchQuery ? <Search size={24} className="opacity-40" /> : <GitBranch size={24} className="opacity-40" />}
               </div>
-              <p className="text-sm font-medium text-foreground mb-1">No workflows here</p>
-              <p className="text-xs mb-6">
-                {selectedFolderId ? "Drop a workflow here, or create a new one" : "Create your first workflow to get started"}
-              </p>
-              <Button
-                size="sm"
-                onClick={() => { setNewWfIsSubworkflow(false); setShowNewWfDialog(true); }}
-              >
-                <Plus size={13} className="mr-1.5" /> New Workflow
-              </Button>
+              {searchQuery ? (
+                <>
+                  <p className="text-sm font-medium text-foreground mb-1">No workflows match "{searchQuery}"</p>
+                  <p className="text-xs mb-6">Try a different name or ID.</p>
+                  <Button size="sm" variant="secondary" onClick={() => setSearchQuery("")}>
+                    <X size={13} className="mr-1.5" /> Clear search
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-foreground mb-1">No workflows here</p>
+                  <p className="text-xs mb-6">
+                    {selectedFolderId ? "Drop a workflow here, or create a new one" : "Create your first workflow to get started"}
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={() => { setNewWfIsSubworkflow(false); setShowNewWfDialog(true); }}
+                  >
+                    <Plus size={13} className="mr-1.5" /> New Workflow
+                  </Button>
+                </>
+              )}
             </div>
           ) : (
-            <div className="space-y-2">
-              {visibleWorkflows.map((wf) => {
-                const st = wf.stats;
-                const rate = st ? successRate(st) : null;
-                const rateNum = st ? (st.completed + st.failed > 0 ? Math.round((st.completed / (st.completed + st.failed)) * 100) : null) : null;
-
-                return (
-                <div
-                  key={wf.id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, wf.id)}
-                  className="group bg-card border border-border hover:border-primary/30 hover:bg-accent/20 rounded-lg cursor-pointer transition-all"
-                  onClick={() => navigate(`/editor/${wf.id}`)}
-                >
-                  {/* Top row: name, badges, actions */}
-                  <div className="flex items-center gap-3 px-4 pt-3 pb-2">
-                    <div className="shrink-0 w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
-                      {statusIcon(wf.status)}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-foreground truncate">{wf.name}</span>
-                        {statusBadge(wf.status)}
-                        {wf.isSubworkflow && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold rounded bg-sky-900/60 text-sky-300">
-                            <GitFork size={9} /> Sub
-                          </span>
-                        )}
-                        {wf.folderId && selectedFolderId === null && (
-                          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-                            <Folder size={9} className="text-amber-500" />
-                            {folders.find((f) => f.id === wf.folderId)?.name}
-                          </span>
-                        )}
-                        {wf.tags && wf.tags.length > 0 && wf.tags.map((t) => {
-                          const active = selectedTags.includes(t);
-                          return (
-                            <button
-                              key={t}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedTags((prev) =>
-                                  prev.includes(t)
-                                    ? prev.filter((x) => x !== t)
-                                    : [...prev, t]
-                                );
-                              }}
-                              className={cn(
-                                "inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors",
-                                active
-                                  ? "bg-primary/20 text-primary border border-primary/40"
-                                  : "bg-secondary text-secondary-foreground hover:bg-secondary/70"
-                              )}
-                              title={active ? `Remove filter: ${t}` : `Filter by ${t}`}
-                            >
-                              <Tag size={8} /> {t}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {wf.description && (
-                        <p className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-md">{wf.description}</p>
-                      )}
-                    </div>
-
-                    {/* Actions */}
-                    <div
-                      className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button onClick={() => setHistoryTarget(wf)}
-                        className="flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors">
-                        <History size={11} /> History
-                      </button>
-                      <button onClick={() => setMoveTarget(wf)}
-                        className="flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors">
-                        <ArrowRight size={11} /> Move
-                      </button>
-                      <button onClick={() => navigate(`/editor/${wf.id}`)}
-                        className="flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors">
-                        <Play size={11} /> Open
-                      </button>
-                      <button onClick={() => handleDeleteWorkflow(wf)} disabled={deleting === wf.id}
-                        className="flex items-center justify-center w-6 h-6 text-muted-foreground hover:text-red-400 hover:bg-red-900/30 rounded transition-colors ml-1">
-                        {deleting === wf.id ? <RefreshCw size={11} className="animate-spin" /> : <Trash2 size={12} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Stats row */}
-                  <div className="flex items-center gap-4 px-4 pb-3 pt-1 border-t border-border/50 overflow-x-auto">
-                    {/* Total executions */}
-                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground shrink-0">
-                      <Activity size={11} className="text-indigo-400" />
-                      <span className="font-semibold text-foreground tabular-nums">{st?.totalExecutions ?? 0}</span>
-                      <span>runs</span>
-                    </div>
-
-                    {/* Success / Failure */}
-                    <div className="flex items-center gap-1.5 text-[10px] shrink-0">
-                      <CheckCircle2 size={10} className="text-emerald-400" />
-                      <span className="font-semibold text-emerald-400 tabular-nums">{st?.completed ?? 0}</span>
-                      <span className="text-muted-foreground mx-0.5">/</span>
-                      <XCircle size={10} className="text-red-400" />
-                      <span className="font-semibold text-red-400 tabular-nums">{st?.failed ?? 0}</span>
-                    </div>
-
-                    {/* Success rate */}
-                    {rateNum !== null && (
-                      <div className="flex items-center gap-1.5 text-[10px] shrink-0">
-                        <TrendingUp size={10} className={rateNum >= 90 ? "text-emerald-400" : rateNum >= 70 ? "text-yellow-400" : "text-red-400"} />
-                        <span className={cn("font-semibold tabular-nums", rateNum >= 90 ? "text-emerald-400" : rateNum >= 70 ? "text-yellow-400" : "text-red-400")}>
-                          {rate}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Separator */}
-                    <div className="w-px h-3 bg-border shrink-0" />
-
-                    {/* Average duration */}
-                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground shrink-0" title="Avg. execution time">
-                      <Timer size={10} className="text-blue-400" />
-                      <span className="tabular-nums">{formatDuration(st?.avgDurationMs)}</span>
-                      <span className="text-muted-foreground/60">avg</span>
-                    </div>
-
-                    {/* Last execution */}
-                    {st?.lastExecution ? (
-                      <>
-                        <div className="w-px h-3 bg-border shrink-0" />
-                        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground shrink-0" title="Last execution">
-                          <Zap size={10} className={statusColor[st.lastExecution.status] ?? "text-muted-foreground"} />
-                          <span className={cn("font-medium capitalize", statusColor[st.lastExecution.status] ?? "text-muted-foreground")}>
-                            {st.lastExecution.status}
-                          </span>
-                          <span className="tabular-nums">{formatRelative(st.lastExecution.startedAt)}</span>
-                          {st.lastExecution.durationMs != null && (
-                            <span className="text-muted-foreground/60">({formatDuration(st.lastExecution.durationMs)})</span>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="w-px h-3 bg-border shrink-0" />
-                        <span className="text-[10px] text-muted-foreground/50 italic shrink-0">Never executed</span>
-                      </>
-                    )}
-
-                    {/* Modified */}
-                    <div className="ml-auto flex items-center gap-1.5 text-[10px] text-muted-foreground shrink-0">
-                      <Clock size={10} />
-                      <span>Modified {formatRelative(wf.updatedAt)}</span>
-                      {wf.version != null && <span className="text-muted-foreground/40">v{wf.version}</span>}
-                    </div>
-                  </div>
-                </div>
-                );
-              })}
-            </div>
+            <WorkflowTable
+              workflows={visibleWorkflows}
+              folders={folders}
+              selectedFolderId={selectedFolderId}
+              selectedTags={selectedTags}
+              deleting={deleting}
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+              onOpen={(wf) => navigate(`/editor/${wf.id}`)}
+              onHistory={(wf) => setHistoryTarget(wf)}
+              onMove={(wf) => setMoveTarget(wf)}
+              onDelete={(wf) => handleDeleteWorkflow(wf)}
+              onTagClick={(t) =>
+                setSelectedTags((prev) =>
+                  prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
+                )
+              }
+              onStatusChange={handleStatusChange}
+              onDragStart={handleDragStart}
+            />
           )}
         </div>
       </div>

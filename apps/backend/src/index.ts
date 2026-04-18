@@ -21,6 +21,7 @@ import { requireAuth } from "./middleware/auth";
 import { resolveEnvironment } from "./middleware/resolveEnvironment";
 import { attachWebSocketServer } from "./ws/executionBroadcaster";
 import { userService } from "./services/UserService";
+import { gitService } from "./services/GitService";
 
 // =============================================================================
 // Express application
@@ -142,6 +143,11 @@ server.listen(config.PORT, async () => {
   await userService.ensureAdminExists().catch((err) =>
     logger.error("Failed to seed admin user", { err })
   );
+
+  // Kick off the auto-pull interval. The interval no-ops whenever the git
+  // config has autoPull disabled or credentials missing, so it's safe to
+  // always start — no separate toggle needed at process level.
+  gitService.startAutoPullInterval();
 });
 
 // ---------------------------------------------------------------------------

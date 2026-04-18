@@ -41,6 +41,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
+import { Switch } from "../components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -85,6 +86,9 @@ function GitTab() {
   const [token, setToken]             = useState("");
   const [showToken, setShowToken]     = useState(false);
   const [tokenMasked, setTokenMasked] = useState(false);
+  const [autoPush, setAutoPush]       = useState(false);
+  const [autoPull, setAutoPull]       = useState(false);
+  const [autoSaving, setAutoSaving]   = useState<"push" | "pull" | null>(null);
 
   const [saving, setSaving]           = useState(false);
   const [saveResult, setSaveResult]   = useState<{ ok: boolean; msg: string } | null>(null);
@@ -111,6 +115,8 @@ function GitTab() {
           setBranch(cfg.branch);
           setUsername(cfg.username ?? "");
           setToken(cfg.token);
+          setAutoPush(!!cfg.autoPush);
+          setAutoPull(!!cfg.autoPull);
           if (cfg.token.startsWith("•")) setTokenMasked(true);
         }
       } catch { /* no config yet */ }
@@ -121,11 +127,46 @@ function GitTab() {
   async function handleSave() {
     setSaving(true); setSaveResult(null);
     try {
-      await saveGitConfig({ provider, repoUrl: repoUrl.trim(), branch: branch.trim(), username: username.trim() || undefined, token });
+      await saveGitConfig({ provider, repoUrl: repoUrl.trim(), branch: branch.trim(), username: username.trim() || undefined, token, autoPush, autoPull });
       setTokenMasked(true);
       setSaveResult({ ok: true, msg: "Configuration saved." });
     } catch (err) { setSaveResult({ ok: false, msg: (err as Error).message }); }
     finally { setSaving(false); }
+  }
+
+  /**
+   * Toggle auto-push/auto-pull independently of the main "Save Configuration"
+   * button — feels more natural for toggles (take effect instantly). Optimistic
+   * UI, rolls back on failure.
+   */
+  async function persistAutoSync(field: "autoPush" | "autoPull", value: boolean) {
+    // Require the rest of the config to be saved before toggles take effect.
+    if (!gitStatus?.configured) {
+      toast.error("Save Git configuration first, then enable auto-sync.");
+      return;
+    }
+    const prev = field === "autoPush" ? autoPush : autoPull;
+    // Optimistic update
+    if (field === "autoPush") setAutoPush(value); else setAutoPull(value);
+    setAutoSaving(field === "autoPush" ? "push" : "pull");
+    try {
+      await saveGitConfig({
+        provider,
+        repoUrl: repoUrl.trim(),
+        branch: branch.trim(),
+        username: username.trim() || undefined,
+        token,
+        autoPush: field === "autoPush" ? value : autoPush,
+        autoPull: field === "autoPull" ? value : autoPull,
+      });
+      setTokenMasked(true);
+    } catch (err) {
+      // Rollback
+      if (field === "autoPush") setAutoPush(prev); else setAutoPull(prev);
+      toast.error((err as Error).message);
+    } finally {
+      setAutoSaving(null);
+    }
   }
 
   async function handlePush() {
@@ -258,6 +299,37 @@ function GitTab() {
               </div>
             </div>
           )}
+          {/* Auto-sync toggles */}
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-medium text-foreground mb-0.5">Auto-push on change</p>
+              <p className="text-xs text-muted-foreground">
+                Automatically push to Git whenever a workflow is created, updated, or deleted.
+                Rapid saves are batched into a single commit.
+              </p>
+            </div>
+            <Switch
+              checked={autoPush}
+              disabled={!gitStatus?.configured || autoSaving === "push"}
+              onCheckedChange={(v) => persistAutoSync("autoPush", v)}
+              aria-label="Toggle auto-push"
+            />
+          </div>
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-medium text-foreground mb-0.5">Auto-pull periodically</p>
+              <p className="text-xs text-muted-foreground">
+                Pull the latest workflows from Git every 5 minutes and upsert into the database.
+              </p>
+            </div>
+            <Switch
+              checked={autoPull}
+              disabled={!gitStatus?.configured || autoSaving === "pull"}
+              onCheckedChange={(v) => persistAutoSync("autoPull", v)}
+              aria-label="Toggle auto-pull"
+            />
+          </div>
+
           <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-4">
             <div>
               <p className="text-xs font-medium text-foreground mb-0.5">Push to Git</p>

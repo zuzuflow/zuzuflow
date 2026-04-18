@@ -278,6 +278,10 @@ export interface GitConfig {
   branch: string;
   username?: string;
   token: string;
+  /** Push automatically when a workflow is created/updated/deleted. */
+  autoPush?: boolean;
+  /** Pull from git on a periodic interval on the backend. */
+  autoPull?: boolean;
 }
 
 export interface GitStatus {

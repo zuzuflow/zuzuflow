@@ -44,7 +44,10 @@ export function TopNav() {
   if (environments.length === 0) return null;
 
   return (
-    <div className="h-10 border-b border-border bg-card/50 backdrop-blur-sm flex items-center px-4 shrink-0">
+    /* `relative z-40` creates a stacking context so the env-switcher dropdown
+       (z-50 inside here) paints above <main>, which is a later sibling and
+       would otherwise overlap it at the default stacking order. */
+    <div className="relative z-40 h-10 border-b border-border bg-card/50 backdrop-blur-sm flex items-center px-4 shrink-0">
       {/* Environment switcher — AWS-style role badge */}
       <div ref={ref} className="relative ml-auto">
         <button

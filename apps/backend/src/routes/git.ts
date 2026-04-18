@@ -30,7 +30,7 @@ gitRouter.get("/config", async (_req: Request, res: Response) => {
 // PUT /api/git/config
 gitRouter.put("/config", async (req: Request, res: Response) => {
   try {
-    const { provider, repoUrl, branch, username, token } = req.body;
+    const { provider, repoUrl, branch, username, token, autoPush, autoPull } = req.body;
     if (!repoUrl || !branch || !token) {
       return res.status(400).json({ error: "repoUrl, branch, and token are required" });
     }
@@ -40,7 +40,15 @@ gitRouter.put("/config", async (req: Request, res: Response) => {
       const existing = await gitService.getConfig();
       resolvedToken = existing?.token ?? "";
     }
-    await gitService.saveConfig({ provider: provider ?? "github", repoUrl, branch, username, token: resolvedToken });
+    await gitService.saveConfig({
+      provider: provider ?? "github",
+      repoUrl,
+      branch,
+      username,
+      token: resolvedToken,
+      autoPush: !!autoPush,
+      autoPull: !!autoPull,
+    });
     res.json({ ok: true });
   } catch (err) {
     logger.error("PUT /git/config", { err });
