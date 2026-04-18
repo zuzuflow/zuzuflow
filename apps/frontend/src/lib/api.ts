@@ -799,8 +799,17 @@ export function getGitConfig(): Promise<GitConfig | null> {
   return request<GitConfig | null>("/git/config");
 }
 
-export function saveGitConfig(cfg: GitConfig): Promise<void> {
-  return request<void>("/git/config", {
+export interface SaveGitConfigResult {
+  ok: true;
+  /** Populated when the backend ran a verification pass. Null when
+   *  `skipVerify: true` was requested (e.g. just toggling auto-sync). */
+  verify: { writeConfirmed: boolean; message: string } | null;
+}
+
+export function saveGitConfig(
+  cfg: GitConfig & { skipVerify?: boolean },
+): Promise<SaveGitConfigResult> {
+  return request<SaveGitConfigResult>("/git/config", {
     method: "PUT",
     body: JSON.stringify(cfg),
   });

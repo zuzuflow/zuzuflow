@@ -30,7 +30,7 @@ gitRouter.get("/config", async (_req: Request, res: Response) => {
 // PUT /api/git/config
 gitRouter.put("/config", async (req: Request, res: Response) => {
   try {
-    const { provider, repoUrl, branch, username, token, autoPush, autoPull } = req.body;
+    const { provider, repoUrl, branch, username, token, autoPush, autoPull, skipVerify } = req.body;
     if (!repoUrl || !branch || !token) {
       return res.status(400).json({ error: "repoUrl, branch, and token are required" });
     }
@@ -40,7 +40,8 @@ gitRouter.put("/config", async (req: Request, res: Response) => {
       const existing = await gitService.getConfig();
       resolvedToken = existing?.token ?? "";
     }
-    await gitService.saveConfig({
+
+    const candidate = {
       provider: provider ?? "github",
       repoUrl,
       branch,
@@ -48,8 +49,29 @@ gitRouter.put("/config", async (req: Request, res: Response) => {
       token: resolvedToken,
       autoPush: !!autoPush,
       autoPull: !!autoPull,
-    });
-    res.json({ ok: true });
+    };
+
+    // Verify credentials BEFORE persisting — we don't want to store a broken
+    // config. Callers that only want to flip autoPush/autoPull on an already
+    // verified config can pass `skipVerify: true`.
+    let verifyResult: { writeConfirmed: boolean; message: string } | null = null;
+    if (!skipVerify) {
+      try {
+        const r = await gitService.verifyAccess(candidate);
+        verifyResult = { writeConfirmed: r.writeConfirmed, message: r.message };
+      } catch (err) {
+        const code = (err as any)?.code;
+        const status = code === "AUTH_FAILED" || code === "NO_WRITE_ACCESS" ? 403
+          : code === "REPO_NOT_FOUND" ? 404
+          : code === "CONNECT_FAILED" ? 502
+          : 400;
+        logger.warn("Git config verification failed", { code, err });
+        return res.status(status).json({ error: (err as Error).message, code });
+      }
+    }
+
+    await gitService.saveConfig(candidate);
+    res.json({ ok: true, verify: verifyResult });
   } catch (err) {
     logger.error("PUT /git/config", { err });
     res.status(500).json({ error: (err as Error).message });

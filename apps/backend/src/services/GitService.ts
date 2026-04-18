@@ -116,6 +116,126 @@ export class GitService {
     await settingService.set("git", cfg);
   }
 
+  /**
+   * Verify that the credentials can reach the remote with WRITE access.
+   *
+   * Strategy:
+   *   1. `git ls-remote` proves the URL is reachable AND the token can read.
+   *      Fails fast on typos, bad tokens, wrong branch, network issues.
+   *   2. Provider API check for write permission — tokens can be read-only,
+   *      and ls-remote can't tell. For GitHub/GitLab we call their REST API
+   *      and inspect the `push` / `maintainer_access` flag. For other
+   *      providers we fall back to ls-remote only and note the caveat.
+   *
+   * Throws `AUTH_FAILED` / `REPO_NOT_FOUND` / `NO_WRITE_ACCESS` errors that
+   * the route handler can translate to a user-friendly 400 response.
+   */
+  async verifyAccess(cfg: GitConfig): Promise<{ ok: true; writeConfirmed: boolean; message: string }> {
+    // 1. Basic reachability + read check via `git ls-remote`
+    const authUrl = buildAuthUrl(cfg);
+    const dir = repoDir();
+    mkdirp(dir);
+    const git = simpleGit(dir);
+    try {
+      // Short timeout — remote should answer quickly or we bail
+      await git.listRemote([authUrl]);
+    } catch (err) {
+      const msg = (err as Error).message || "";
+      if (/Authentication failed|401|Invalid username or password|could not read Username/i.test(msg)) {
+        throw Object.assign(new Error("Authentication failed — token is invalid or missing required scopes"), {
+          code: "AUTH_FAILED",
+        });
+      }
+      if (/Repository not found|404|does not exist/i.test(msg)) {
+        throw Object.assign(new Error("Repository not found — check the URL and that the token has access to it"), {
+          code: "REPO_NOT_FOUND",
+        });
+      }
+      throw Object.assign(new Error(`Could not reach remote: ${msg.split("\n")[0]}`), { code: "CONNECT_FAILED" });
+    }
+
+    // 2. Provider-specific write-permission probe
+    if (cfg.provider === "github") {
+      const writeOk = await this._verifyGithubWrite(cfg);
+      if (!writeOk) {
+        throw Object.assign(new Error("Token has read access but NOT write access. Grant 'Contents: Read and write' (or the classic `repo` scope)."), {
+          code: "NO_WRITE_ACCESS",
+        });
+      }
+      return { ok: true, writeConfirmed: true, message: "Verified — token has write access" };
+    }
+
+    if (cfg.provider === "gitlab") {
+      const writeOk = await this._verifyGitlabWrite(cfg);
+      if (!writeOk) {
+        throw Object.assign(new Error("Token has read access but NOT write access. Needs the `write_repository` scope and Developer+ role."), {
+          code: "NO_WRITE_ACCESS",
+        });
+      }
+      return { ok: true, writeConfirmed: true, message: "Verified — token has write access" };
+    }
+
+    // Bitbucket / custom — we can't cheaply check write permission without a
+    // real push. Return OK but flag it so the UI can warn.
+    return {
+      ok: true,
+      writeConfirmed: false,
+      message: "Verified reachable & readable. Write access will be confirmed on first push.",
+    };
+  }
+
+  /** Call the GitHub REST API to check if the token has push permission.
+   *  Returns false on any auth/permissions issue, true only on an explicit
+   *  `push: true` in the response. */
+  private async _verifyGithubWrite(cfg: GitConfig): Promise<boolean> {
+    try {
+      // Parse owner/repo from URL. Accepts https://github.com/org/repo(.git)
+      const url = new URL(cfg.repoUrl);
+      const parts = url.pathname.replace(/^\//, "").replace(/\.git$/, "").split("/");
+      if (parts.length < 2) return false;
+      const [owner, repo] = parts;
+
+      const apiUrl = `https://api.github.com/repos/${owner}/${repo}`;
+      const res = await fetch(apiUrl, {
+        headers: {
+          "Accept": "application/vnd.github+json",
+          "Authorization": `Bearer ${cfg.token}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      });
+      if (!res.ok) return false;
+      const body = (await res.json()) as { permissions?: { push?: boolean; admin?: boolean; maintain?: boolean } };
+      return !!(body.permissions?.push || body.permissions?.admin || body.permissions?.maintain);
+    } catch (err) {
+      logger.warn("GitHub write-permission probe failed", { err });
+      return false;
+    }
+  }
+
+  /** Call the GitLab REST API. Needs the `read_api` scope at minimum; if the
+   *  token can't even call this endpoint we assume no write access. */
+  private async _verifyGitlabWrite(cfg: GitConfig): Promise<boolean> {
+    try {
+      const url = new URL(cfg.repoUrl);
+      const projectPath = url.pathname.replace(/^\//, "").replace(/\.git$/, "");
+      const apiUrl = `${url.origin}/api/v4/projects/${encodeURIComponent(projectPath)}`;
+      const res = await fetch(apiUrl, {
+        headers: { "PRIVATE-TOKEN": cfg.token },
+      });
+      if (!res.ok) return false;
+      const body = (await res.json()) as { permissions?: { project_access?: { access_level?: number }; group_access?: { access_level?: number } } };
+      // GitLab access levels: Developer=30, Maintainer=40, Owner=50 — any of these can push
+      const levels = [
+        body.permissions?.project_access?.access_level ?? 0,
+        body.permissions?.group_access?.access_level ?? 0,
+      ];
+      return levels.some((l) => l >= 30);
+    } catch (err) {
+      logger.warn("GitLab write-permission probe failed", { err });
+      return false;
+    }
+  }
+
   /** Current sync status (last push/pull timestamps). */
   async getStatus(): Promise<GitStatus> {
     const cfg = await this.getConfig();

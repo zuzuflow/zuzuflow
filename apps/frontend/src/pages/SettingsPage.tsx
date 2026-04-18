@@ -130,15 +130,19 @@ const labelClass = "block text-xs font-medium text-muted-foreground mb-1";
 
 function ResultPill({ ok, msg }: { ok: boolean; msg: string }) {
   return (
-    <span
+    <div
       className={cn(
-        "flex items-center gap-1 text-xs",
-        ok ? "text-emerald-400" : "text-red-400",
+        "flex items-start gap-1.5 text-xs rounded px-2 py-1.5 border break-words whitespace-pre-wrap",
+        ok
+          ? "text-emerald-400 bg-emerald-900/20 border-emerald-900/40"
+          : "text-red-400 bg-red-900/20 border-red-900/40",
       )}
     >
-      {ok ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
-      {msg}
-    </span>
+      {ok
+        ? <CheckCircle2 size={12} className="shrink-0 mt-0.5" />
+        : <XCircle size={12} className="shrink-0 mt-0.5" />}
+      <span className="min-w-0 break-words">{msg}</span>
+    </div>
   );
 }
 
@@ -210,7 +214,7 @@ function GitTab() {
     setSaving(true);
     setSaveResult(null);
     try {
-      await saveGitConfig({
+      const result = await saveGitConfig({
         provider,
         repoUrl: repoUrl.trim(),
         branch: branch.trim(),
@@ -220,7 +224,14 @@ function GitTab() {
         autoPull,
       });
       setTokenMasked(true);
-      setSaveResult({ ok: true, msg: "Configuration saved." });
+      // Backend returns a verify summary (reachability + write permission).
+      // Show that message so the user knows upfront whether the token has
+      // the needed scopes — no silent failures at push time.
+      setSaveResult({
+        ok: true,
+        msg: result.verify?.message ?? "Configuration saved.",
+      });
+      loadStatus(); // refresh "Connected" badge for first-save case
     } catch (err) {
       setSaveResult({ ok: false, msg: (err as Error).message });
     } finally {
@@ -256,6 +267,9 @@ function GitTab() {
         token,
         autoPush: field === "autoPush" ? value : autoPush,
         autoPull: field === "autoPull" ? value : autoPull,
+        // Just toggling auto-sync flags on an already-saved config — no need
+        // to burn another ls-remote + GitHub API call.
+        skipVerify: true,
       });
       setTokenMasked(true);
     } catch (err) {
@@ -504,22 +518,21 @@ function GitTab() {
             />
           </div>
 
-          <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-medium text-foreground mb-0.5">
-                Push to Git
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Export all workflows to the remote repository, organized by
-                folder.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-              {pushResult && <ResultPill {...pushResult} />}
+          <div className="px-5 py-4 border-b border-border space-y-2">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-foreground mb-0.5">
+                  Push to Git
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Export all workflows to the remote repository, organized by
+                  folder.
+                </p>
+              </div>
               <button
                 onClick={handlePush}
                 disabled={pushing || !gitStatus?.configured}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded bg-muted hover:bg-slate-600 text-foreground transition-colors disabled:opacity-40"
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded bg-muted hover:bg-slate-600 text-foreground transition-colors disabled:opacity-40"
               >
                 {pushing ? (
                   <Loader2 size={12} className="animate-spin" />
@@ -529,23 +542,23 @@ function GitTab() {
                 Push
               </button>
             </div>
+            {pushResult && <ResultPill {...pushResult} />}
           </div>
-          <div className="px-5 py-4 flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-medium text-foreground mb-0.5">
-                Pull from Git
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Import workflows from the repository and upsert them into the
-                database.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-              {pullResult && <ResultPill {...pullResult} />}
+          <div className="px-5 py-4 space-y-2">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-foreground mb-0.5">
+                  Pull from Git
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Import workflows from the repository and upsert them into the
+                  database.
+                </p>
+              </div>
               <button
                 onClick={handlePull}
                 disabled={pulling || !gitStatus?.configured}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded bg-muted hover:bg-slate-600 text-foreground transition-colors disabled:opacity-40"
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded bg-muted hover:bg-slate-600 text-foreground transition-colors disabled:opacity-40"
               >
                 {pulling ? (
                   <Loader2 size={12} className="animate-spin" />
@@ -555,6 +568,7 @@ function GitTab() {
                 Pull
               </button>
             </div>
+            {pullResult && <ResultPill {...pullResult} />}
           </div>
         </div>
       </div>
