@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, Building2, Check, Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useOrgStore } from "@/store/orgStore";
 import { useEnvironmentStore } from "@/store/environmentStore";
 import { switchOrganization } from "@/lib/api";
@@ -22,6 +23,7 @@ function getRoleBadgeClass(role: string): string {
 }
 
 export function OrgSwitcher({ expanded }: Props) {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -53,13 +55,19 @@ export function OrgSwitcher({ expanded }: Props) {
     }
     setSwitchingId(orgId);
     try {
-      const newToken = await switchOrganization(orgId);
-      setToken(newToken);
+      const result = await switchOrganization(orgId);
+      setToken(result.token);
       setCurrentOrgId(orgId);
       // Clear environment state so it reloads for new org
       useEnvironmentStore.getState().clear();
-      // Notify the app that organization changed
-      window.dispatchEvent(new CustomEvent("organization-changed", { detail: { orgId } }));
+      if ("mfaEnrollmentRequired" in result) {
+        navigate("/mfa-setup", { replace: true });
+      } else {
+        // Notify the app that organization changed
+        window.dispatchEvent(
+          new CustomEvent("organization-changed", { detail: { orgId } }),
+        );
+      }
       setOpen(false);
     } catch {
       // Silently fail — user stays on current org
@@ -72,17 +80,27 @@ export function OrgSwitcher({ expanded }: Props) {
     <div ref={ref} className="relative px-2 py-1.5">
       <button
         onClick={() => setOpen(!open)}
-        title={!expanded ? `Organization: ${current?.name ?? "Unknown"}` : undefined}
+        title={
+          !expanded ? `Organization: ${current?.name ?? "Unknown"}` : undefined
+        }
         className={cn(
           "flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm transition-colors",
-          "hover:bg-accent text-foreground"
+          "hover:bg-accent text-foreground",
         )}
       >
         <Building2 size={14} className="shrink-0 text-primary" />
         {expanded ? (
           <>
-            <span className="truncate flex-1 text-left text-xs font-medium">{current?.name ?? "Select Org"}</span>
-            <ChevronDown size={12} className={cn("shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
+            <span className="truncate flex-1 text-left text-xs font-medium">
+              {current?.name ?? "Select Org"}
+            </span>
+            <ChevronDown
+              size={12}
+              className={cn(
+                "shrink-0 text-muted-foreground transition-transform",
+                open && "rotate-180",
+              )}
+            />
           </>
         ) : null}
       </button>
@@ -91,7 +109,7 @@ export function OrgSwitcher({ expanded }: Props) {
         <div
           className={cn(
             "absolute z-50 bg-popover border border-border rounded-lg shadow-lg py-1 min-w-[200px]",
-            expanded ? "left-2 right-2 top-full mt-1" : "left-full ml-2 top-0"
+            expanded ? "left-2 right-2 top-full mt-1" : "left-full ml-2 top-0",
           )}
         >
           <div className="px-2 py-1 text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
@@ -104,16 +122,26 @@ export function OrgSwitcher({ expanded }: Props) {
               disabled={switchingId !== null}
               className={cn(
                 "flex items-center gap-2 w-full px-2 py-1.5 text-xs transition-colors hover:bg-accent rounded-md mx-0.5 disabled:opacity-50",
-                org.id === currentOrgId ? "text-primary font-medium" : "text-foreground"
+                org.id === currentOrgId
+                  ? "text-primary font-medium"
+                  : "text-foreground",
               )}
             >
               <Building2 size={12} className="shrink-0 text-muted-foreground" />
               <span className="flex-1 text-left truncate">{org.name}</span>
-              <span className={cn("text-[9px] font-medium px-1.5 py-0.5 rounded-full", getRoleBadgeClass(org.role))}>
+              <span
+                className={cn(
+                  "text-[9px] font-medium px-1.5 py-0.5 rounded-full",
+                  getRoleBadgeClass(org.role),
+                )}
+              >
                 {org.role}
               </span>
               {switchingId === org.id ? (
-                <Loader2 size={12} className="animate-spin shrink-0 text-muted-foreground" />
+                <Loader2
+                  size={12}
+                  className="animate-spin shrink-0 text-muted-foreground"
+                />
               ) : org.id === currentOrgId ? (
                 <Check size={12} className="shrink-0 text-primary" />
               ) : null}
