@@ -9,7 +9,12 @@ import { getTemporalClient } from "../temporal/client";
 import { config } from "../config";
 import { tagService } from "./TagService";
 import { taskQueueResolver } from "./TaskQueueResolver";
-import type { WorkflowTemplate, WorkflowNode, WorkflowEdge, CronConfig } from "@workflow/shared";
+import type {
+  WorkflowTemplate,
+  WorkflowNode,
+  WorkflowEdge,
+  CronConfig,
+} from "@workflow/shared";
 
 // =============================================================================
 // Zod schema mirroring WorkflowTemplate — used to validate incoming JSON
@@ -17,28 +22,72 @@ import type { WorkflowTemplate, WorkflowNode, WorkflowEdge, CronConfig } from "@
 
 const nodeKindSchema = z.enum([
   // Triggers
-  "manual", "webhook", "cron", "mqtt_trigger", "external_trigger", "trigger_output",
-  "workflow_trigger_in", "workflow_trigger_out",
+  "manual",
+  "webhook",
+  "cron",
+  "mqtt_trigger",
+  "external_trigger",
+  "trigger_output",
+  "workflow_trigger_in",
+  "workflow_trigger_out",
   // Logical
-  "if_else", "switch", "delay", "merge", "stop",
+  "if_else",
+  "switch",
+  "delay",
+  "merge",
+  "stop",
   // Utilities
-  "http_request", "js_runner", "data_mapper", "json_parser",
-  "html_template", "crypto_hash", "date_formatter", "base64",
+  "http_request",
+  "js_runner",
+  "data_mapper",
+  "json_parser",
+  "html_template",
+  "crypto_hash",
+  "date_formatter",
+  "base64",
   // Data & Storage
-  "postgres_query", "mysql", "mongodb", "redis", "s3_bucket",
+  "postgres_query",
+  "mysql",
+  "mongodb",
+  "redis",
+  "s3_bucket",
   // Communication
-  "rabbitmq", "send_email", "slack", "ssh_terminal", "twilio_sms", "twilio_email",
+  "rabbitmq",
+  "send_email",
+  "slack",
+  "ssh_terminal",
+  "twilio_sms",
+  "twilio_email",
   // AI Agents
   "llm_prompt",
+  "ai_agent",
   // Code
-  "custom_code", "debug", "ts_runner", "python_runner",
+  "custom_code",
+  "debug",
+  "ts_runner",
+  "python_runner",
   // Subworkflows
-  "subworkflow_call", "subflow_input", "subflow_output",
+  "subworkflow_call",
+  "subflow_input",
+  "subflow_output",
   // Phase 1 extras
-  "mariadb", "mssql", "google_sheets", "firebase_push", "apns_push", "loop", "response",
+  "mariadb",
+  "mssql",
+  "google_sheets",
+  "firebase_push",
+  "apns_push",
+  "loop",
+  "response",
   // AWS Cloud
-  "aws_lambda", "aws_sqs", "aws_sns", "aws_dynamodb", "aws_ses",
-  "aws_secrets_manager", "aws_ssm", "aws_eventbridge", "aws_step_functions",
+  "aws_lambda",
+  "aws_sqs",
+  "aws_sns",
+  "aws_dynamodb",
+  "aws_ses",
+  "aws_secrets_manager",
+  "aws_ssm",
+  "aws_eventbridge",
+  "aws_step_functions",
 ]);
 
 const workflowNodeSchema = z.object({
@@ -46,9 +95,7 @@ const workflowNodeSchema = z.object({
   kind: nodeKindSchema,
   label: z.string().min(1),
   config: z.record(z.unknown()),
-  position: z
-    .object({ x: z.number(), y: z.number() })
-    .optional(),
+  position: z.object({ x: z.number(), y: z.number() }).optional(),
 });
 
 const workflowEdgeSchema = z.object({
@@ -62,12 +109,18 @@ const workflowEdgeSchema = z.object({
 const workflowTemplateSchema = z
   .object({
     version: z.literal("1.0"),
-    nodes: z.array(workflowNodeSchema).min(1, "Template must have at least one node"),
+    nodes: z
+      .array(workflowNodeSchema)
+      .min(1, "Template must have at least one node"),
     edges: z.array(workflowEdgeSchema),
   })
   .refine(
-    (tmpl) => tmpl.nodes.filter((n) => n.kind === "external_trigger").length <= 1,
-    { message: "Workflow can contain at most one External Trigger node", path: ["nodes"] }
+    (tmpl) =>
+      tmpl.nodes.filter((n) => n.kind === "external_trigger").length <= 1,
+    {
+      message: "Workflow can contain at most one External Trigger node",
+      path: ["nodes"],
+    },
   );
 
 // -----------------------------------------------------------------------------
@@ -92,9 +145,9 @@ export function assertValidKeyFormat(key: string): void {
   if (!KEY_REGEX.test(key)) {
     throw Object.assign(
       new Error(
-        "Invalid workflow key. Must match /^wf_[a-z0-9_-]{4,40}$/ (e.g. wf_my-workflow)."
+        "Invalid workflow key. Must match /^wf_[a-z0-9_-]{4,40}$/ (e.g. wf_my-workflow).",
       ),
-      { code: "VALIDATION_ERROR" }
+      { code: "VALIDATION_ERROR" },
     );
   }
 }
@@ -150,7 +203,7 @@ const withTags = {
 
 /** Flatten the nested WorkflowTag→Tag into a plain string[] alongside the row. */
 function flattenTags<T extends { tags?: { tag: { name: string } }[] }>(
-  workflow: T
+  workflow: T,
 ): Omit<T, "tags"> & { tags: string[] } {
   const { tags, ...rest } = workflow;
   return {
@@ -200,11 +253,14 @@ export class WorkflowService {
         } catch (err) {
           // Surface user-supplied key collisions; retry on auto-generated ones.
           const isUnique =
-            err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
+            err instanceof Prisma.PrismaClientKnownRequestError &&
+            err.code === "P2002";
           if (isUnique && input.key) {
             throw Object.assign(
-              new Error(`Workflow key "${input.key}" already exists in this environment.`),
-              { code: "CONFLICT" }
+              new Error(
+                `Workflow key "${input.key}" already exists in this environment.`,
+              ),
+              { code: "CONFLICT" },
             );
           }
           if (isUnique && ++attempts < maxAttempts) continue;
@@ -212,7 +268,12 @@ export class WorkflowService {
         }
       }
       if (input.tags && input.tags.length > 0) {
-        await tagService.setWorkflowTags(created.id, input.environmentId, input.tags, tx);
+        await tagService.setWorkflowTags(
+          created.id,
+          input.environmentId,
+          input.tags,
+          tx,
+        );
       }
       return tx.workflow.findUnique({
         where: { id: created.id },
@@ -220,7 +281,10 @@ export class WorkflowService {
       });
     });
 
-    logger.info("Workflow created", { workflowId: workflow!.id, name: workflow!.name });
+    logger.info("Workflow created", {
+      workflowId: workflow!.id,
+      name: workflow!.name,
+    });
     return flattenTags(workflow!);
   }
 
@@ -254,7 +318,15 @@ export class WorkflowService {
     limit?: number;
     offset?: number;
   }) {
-    const { environmentId, status, folderId, tagsAny, tagsAll, limit = 100, offset = 0 } = opts;
+    const {
+      environmentId,
+      status,
+      folderId,
+      tagsAny,
+      tagsAll,
+      limit = 100,
+      offset = 0,
+    } = opts;
 
     const where: Prisma.WorkflowWhereInput = { environmentId };
     if (status) where.status = status as Prisma.EnumWorkflowStatusFilter;
@@ -307,35 +379,46 @@ export class WorkflowService {
 
     // Aggregate execution stats per workflow in a single query
     const workflowIds = items.map((w) => w.id);
-    const execStats = workflowIds.length > 0
-      ? await prisma.execution.groupBy({
-          by: ["workflowId", "status"],
-          where: { workflowId: { in: workflowIds } },
-          _count: true,
-        })
-      : [];
+    const execStats =
+      workflowIds.length > 0
+        ? await prisma.execution.groupBy({
+            by: ["workflowId", "status"],
+            where: { workflowId: { in: workflowIds } },
+            _count: true,
+          })
+        : [];
 
     // Compute average duration for completed executions
-    const avgDurations = workflowIds.length > 0
-      ? await prisma.$queryRawUnsafe<{ workflowId: string; avgMs: number }[]>(
-          `SELECT "workflowId", AVG(EXTRACT(EPOCH FROM ("completedAt" - "startedAt")) * 1000) as "avgMs"
+    const avgDurations =
+      workflowIds.length > 0
+        ? await prisma.$queryRawUnsafe<{ workflowId: string; avgMs: number }[]>(
+            `SELECT "workflowId", AVG(EXTRACT(EPOCH FROM ("completedAt" - "startedAt")) * 1000) as "avgMs"
            FROM "executions"
            WHERE "workflowId" = ANY($1) AND "status" = 'completed' AND "completedAt" IS NOT NULL
            GROUP BY "workflowId"`,
-          workflowIds
-        )
-      : [];
+            workflowIds,
+          )
+        : [];
 
-    const statsMap = new Map<string, {
-      totalExecutions: number;
-      completed: number;
-      failed: number;
-      running: number;
-      avgDurationMs: number | null;
-    }>();
+    const statsMap = new Map<
+      string,
+      {
+        totalExecutions: number;
+        completed: number;
+        failed: number;
+        running: number;
+        avgDurationMs: number | null;
+      }
+    >();
 
     for (const wfId of workflowIds) {
-      statsMap.set(wfId, { totalExecutions: 0, completed: 0, failed: 0, running: 0, avgDurationMs: null });
+      statsMap.set(wfId, {
+        totalExecutions: 0,
+        completed: 0,
+        failed: 0,
+        running: 0,
+        avgDurationMs: null,
+      });
     }
 
     for (const row of execStats) {
@@ -355,9 +438,11 @@ export class WorkflowService {
     const enrichedItems = items.map((w) => {
       const stats = statsMap.get(w.id);
       const lastExec = w.executions[0] ?? null;
-      const lastDurationMs = lastExec?.completedAt && lastExec?.startedAt
-        ? new Date(lastExec.completedAt).getTime() - new Date(lastExec.startedAt).getTime()
-        : null;
+      const lastDurationMs =
+        lastExec?.completedAt && lastExec?.startedAt
+          ? new Date(lastExec.completedAt).getTime() -
+            new Date(lastExec.startedAt).getTime()
+          : null;
 
       return {
         id: w.id,
@@ -418,7 +503,9 @@ export class WorkflowService {
           where: { id },
           data: {
             ...(input.name !== undefined && { name: input.name }),
-            ...(input.description !== undefined && { description: input.description }),
+            ...(input.description !== undefined && {
+              description: input.description,
+            }),
             ...(input.key !== undefined && { key: input.key }),
             ...(input.template !== undefined && {
               template: input.template as unknown as Prisma.InputJsonValue,
@@ -434,14 +521,21 @@ export class WorkflowService {
           err.code === "P2002"
         ) {
           throw Object.assign(
-            new Error(`Workflow key "${input.key}" already exists in this environment.`),
-            { code: "CONFLICT" }
+            new Error(
+              `Workflow key "${input.key}" already exists in this environment.`,
+            ),
+            { code: "CONFLICT" },
           );
         }
         throw err;
       }
       if (input.tags !== undefined) {
-        await tagService.setWorkflowTags(id, updated.environmentId, input.tags, tx);
+        await tagService.setWorkflowTags(
+          id,
+          updated.environmentId,
+          input.tags,
+          tx,
+        );
       }
       return tx.workflow.findUnique({
         where: { id },
@@ -452,12 +546,16 @@ export class WorkflowService {
     // If the workflow is active and the template changed, sync cron schedule
     if (input.template && existing.status === "active") {
       const template = input.template;
-      const cronNode = template.nodes.find((n: WorkflowNode) => n.kind === "cron");
+      const cronNode = template.nodes.find(
+        (n: WorkflowNode) => n.kind === "cron",
+      );
 
       if (cronNode) {
         // Cron node exists — upsert the Temporal schedule with the new expression
         await this._upsertCronSchedule(id, template, cronNode);
-        logger.info("Cron schedule synced on workflow update", { workflowId: id });
+        logger.info("Cron schedule synced on workflow update", {
+          workflowId: id,
+        });
       } else {
         // Cron node was removed — delete the Temporal schedule if it exists
         try {
@@ -465,14 +563,19 @@ export class WorkflowService {
           const scheduleId = `cron-wf-${id}`;
           const handle = temporal.schedule.getHandle(scheduleId);
           await handle.delete();
-          logger.info("Cron schedule deleted (cron node removed)", { workflowId: id });
+          logger.info("Cron schedule deleted (cron node removed)", {
+            workflowId: id,
+          });
         } catch {
           // Schedule may not exist — ignore
         }
       }
     }
 
-    logger.info("Workflow updated", { workflowId: id, version: workflow!.version });
+    logger.info("Workflow updated", {
+      workflowId: id,
+      version: workflow!.version,
+    });
     return flattenTags(workflow!);
   }
 
@@ -496,12 +599,14 @@ export class WorkflowService {
     if (!validation.valid) {
       throw Object.assign(
         new Error("Cannot activate workflow with an invalid template"),
-        { code: "VALIDATION_ERROR", details: validation.errors }
+        { code: "VALIDATION_ERROR", details: validation.errors },
       );
     }
 
     const template = workflow.template as unknown as WorkflowTemplate;
-    const cronNode = template.nodes.find((n: WorkflowNode) => n.kind === "cron");
+    const cronNode = template.nodes.find(
+      (n: WorkflowNode) => n.kind === "cron",
+    );
 
     if (cronNode) {
       // Register (or update) a durable Temporal Schedule so the workflow fires
@@ -547,7 +652,7 @@ export class WorkflowService {
   private async _upsertCronSchedule(
     workflowId: string,
     template: WorkflowTemplate,
-    cronNode: WorkflowNode
+    cronNode: WorkflowNode,
   ) {
     const cfg = cronNode.config as CronConfig;
     const temporal = await getTemporalClient();
@@ -566,13 +671,15 @@ export class WorkflowService {
         environment: { select: { organizationId: true } },
       },
     });
-    const scheduleArgs = [{
-      executionId: "auto",
-      workflowId,
-      template,
-      triggerPayload: { source: "cron", expression: cfg.expression },
-      environmentId: wf?.environmentId,
-    }];
+    const scheduleArgs = [
+      {
+        executionId: "auto",
+        workflowId,
+        template,
+        triggerPayload: { source: "cron", expression: cfg.expression },
+        environmentId: wf?.environmentId,
+      },
+    ];
 
     const taskQueue = await taskQueueResolver.resolveTaskQueue(
       wf?.environment?.organizationId,
@@ -596,12 +703,19 @@ export class WorkflowService {
           catchupWindow: "1 minute",
         },
       });
-      logger.info("Temporal Schedule created", { scheduleId, expression: cfg.expression });
+      logger.info("Temporal Schedule created", {
+        scheduleId,
+        expression: cfg.expression,
+      });
     } catch (err: unknown) {
       // ALREADY_EXISTS → update the spec in place
       const code = (err as { code?: string })?.code ?? "";
       const message = (err as Error)?.message ?? "";
-      if (code === "ALREADY_EXISTS" || message.includes("already") || message.includes("exists")) {
+      if (
+        code === "ALREADY_EXISTS" ||
+        message.includes("already") ||
+        message.includes("exists")
+      ) {
         const handle = temporal.schedule.getHandle(scheduleId);
         await handle.update((s) => ({
           ...s,
@@ -612,10 +726,13 @@ export class WorkflowService {
         }));
         logger.info("Temporal Schedule updated", { scheduleId });
       } else {
-        logger.warn("Could not register Temporal Schedule — workflow will still run manually", {
-          scheduleId,
-          err,
-        });
+        logger.warn(
+          "Could not register Temporal Schedule — workflow will still run manually",
+          {
+            scheduleId,
+            err,
+          },
+        );
       }
     }
   }

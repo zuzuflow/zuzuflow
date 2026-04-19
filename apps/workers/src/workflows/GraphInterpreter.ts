@@ -28,7 +28,8 @@ import {
 
 // Signal sent by the backend when an inbound HTTP request arrives at the
 // registered webhook endpoint while this workflow is waiting.
-export const webhookPayloadSignal = defineSignal<[Record<string, unknown>]>("webhookPayload");
+export const webhookPayloadSignal =
+  defineSignal<[Record<string, unknown>]>("webhookPayload");
 
 // ---- Type-only imports are stripped at compile time — safe for the sandbox ----
 import type {
@@ -64,6 +65,7 @@ import type {
   TwilioSmsConfig,
   TwilioEmailConfig,
   LlmPromptConfig,
+  AiAgentConfig,
   SubworkflowCallConfig,
   MariadbConfig,
   MssqlConfig,
@@ -98,8 +100,14 @@ import type {
   UpdateExecutionStatusInput,
 } from "../activities/persistence";
 import type { TriggerWorkflowActivityInput } from "../activities/workflow_trigger";
-import type { JsRunnerActivityInput, JsRunnerActivityOutput } from "../activities/js_runner";
-import type { TsRunnerActivityInput, TsRunnerActivityOutput } from "../activities/ts_runner";
+import type {
+  JsRunnerActivityInput,
+  JsRunnerActivityOutput,
+} from "../activities/js_runner";
+import type {
+  TsRunnerActivityInput,
+  TsRunnerActivityOutput,
+} from "../activities/ts_runner";
 import type {
   DataMapperActivityInput,
   JsonParserActivityInput,
@@ -114,13 +122,20 @@ import type { RedisActivityInput } from "../activities/redis";
 import type { S3ActivityInput } from "../activities/s3";
 import type { SlackActivityInput } from "../activities/slack";
 import type { SshActivityInput } from "../activities/ssh";
-import type { TwilioSmsActivityInput, TwilioEmailActivityInput } from "../activities/twilio";
+import type {
+  TwilioSmsActivityInput,
+  TwilioEmailActivityInput,
+} from "../activities/twilio";
 import type { LlmPromptActivityInput } from "../activities/llm";
+import type { AiAgentActivityInput } from "../activities/aiAgent";
 import type { PrepareSubworkflowInput } from "../activities/subworkflow";
 import type { MariadbActivityInput } from "../activities/mariadb";
 import type { MssqlActivityInput } from "../activities/mssql";
 import type { GoogleSheetsActivityInput } from "../activities/google_sheets";
-import type { PythonRunnerActivityInput, PythonRunnerActivityOutput } from "../activities/python_runner";
+import type {
+  PythonRunnerActivityInput,
+  PythonRunnerActivityOutput,
+} from "../activities/python_runner";
 import type { FirebasePushActivityInput } from "../activities/firebase_push";
 import type { ApnsPushActivityInput } from "../activities/apns_push";
 import type { AwsLambdaActivityInput } from "../activities/aws_lambda";
@@ -132,7 +147,6 @@ import type { AwsSecretsManagerActivityInput } from "../activities/aws_secrets_m
 import type { AwsSsmActivityInput } from "../activities/aws_ssm";
 import type { AwsEventBridgeActivityInput } from "../activities/aws_eventbridge";
 import type { AwsStepFunctionsActivityInput } from "../activities/aws_step_functions";
-
 
 // =============================================================================
 // Activity type map — used by proxyActivities inside the workflow function
@@ -146,13 +160,29 @@ type ActivityMap = {
   mqttPublishActivity(input: MqttPublishInput): Promise<unknown>;
   rabbitmqActivity(input: RabbitMQActivityInput): Promise<unknown>;
   writeNodeLogActivity(input: NodeLogInput): Promise<void>;
-  updateExecutionStatusActivity(input: UpdateExecutionStatusInput): Promise<void>;
-  createExecutionRecordActivity(input: { workflowId: string; triggerPayload: Record<string, unknown>; environmentId?: string }): Promise<string>;
-  resolveCredentialActivity(credentialId: string): Promise<Record<string, string>>;
-  resolveVariablesActivity(environmentId?: string): Promise<Record<string, string>>;
-  triggerWorkflowActivity(input: TriggerWorkflowActivityInput): Promise<unknown>;
-  jsRunnerActivity(input: JsRunnerActivityInput): Promise<JsRunnerActivityOutput>;
-  tsRunnerActivity(input: TsRunnerActivityInput): Promise<TsRunnerActivityOutput>;
+  updateExecutionStatusActivity(
+    input: UpdateExecutionStatusInput,
+  ): Promise<void>;
+  createExecutionRecordActivity(input: {
+    workflowId: string;
+    triggerPayload: Record<string, unknown>;
+    environmentId?: string;
+  }): Promise<string>;
+  resolveCredentialActivity(
+    credentialId: string,
+  ): Promise<Record<string, string>>;
+  resolveVariablesActivity(
+    environmentId?: string,
+  ): Promise<Record<string, string>>;
+  triggerWorkflowActivity(
+    input: TriggerWorkflowActivityInput,
+  ): Promise<unknown>;
+  jsRunnerActivity(
+    input: JsRunnerActivityInput,
+  ): Promise<JsRunnerActivityOutput>;
+  tsRunnerActivity(
+    input: TsRunnerActivityInput,
+  ): Promise<TsRunnerActivityOutput>;
   dataMappingActivity(input: DataMapperActivityInput): Promise<unknown>;
   jsonParserActivity(input: JsonParserActivityInput): Promise<unknown>;
   htmlTemplateActivity(input: HtmlTemplateActivityInput): Promise<unknown>;
@@ -168,11 +198,20 @@ type ActivityMap = {
   twilioSmsActivity(input: TwilioSmsActivityInput): Promise<unknown>;
   twilioEmailActivity(input: TwilioEmailActivityInput): Promise<unknown>;
   llmPromptActivity(input: LlmPromptActivityInput): Promise<unknown>;
-  prepareSubworkflowActivity(input: PrepareSubworkflowInput): Promise<{ executionId: string; template: unknown; triggerPayload: Record<string, unknown> }>;
+  aiAgentActivity(input: AiAgentActivityInput): Promise<unknown>;
+  prepareSubworkflowActivity(
+    input: PrepareSubworkflowInput,
+  ): Promise<{
+    executionId: string;
+    template: unknown;
+    triggerPayload: Record<string, unknown>;
+  }>;
   mariadbActivity(input: MariadbActivityInput): Promise<unknown>;
   mssqlActivity(input: MssqlActivityInput): Promise<unknown>;
   googleSheetsActivity(input: GoogleSheetsActivityInput): Promise<unknown>;
-  pythonRunnerActivity(input: PythonRunnerActivityInput): Promise<PythonRunnerActivityOutput>;
+  pythonRunnerActivity(
+    input: PythonRunnerActivityInput,
+  ): Promise<PythonRunnerActivityOutput>;
   firebasePushActivity(input: FirebasePushActivityInput): Promise<unknown>;
   apnsPushActivity(input: ApnsPushActivityInput): Promise<unknown>;
   awsLambdaActivity(input: AwsLambdaActivityInput): Promise<unknown>;
@@ -180,10 +219,14 @@ type ActivityMap = {
   awsSnsActivity(input: AwsSnsActivityInput): Promise<unknown>;
   awsDynamoDBActivity(input: AwsDynamoDBActivityInput): Promise<unknown>;
   awsSesActivity(input: AwsSesActivityInput): Promise<unknown>;
-  awsSecretsManagerActivity(input: AwsSecretsManagerActivityInput): Promise<unknown>;
+  awsSecretsManagerActivity(
+    input: AwsSecretsManagerActivityInput,
+  ): Promise<unknown>;
   awsSsmActivity(input: AwsSsmActivityInput): Promise<unknown>;
   awsEventBridgeActivity(input: AwsEventBridgeActivityInput): Promise<unknown>;
-  awsStepFunctionsActivity(input: AwsStepFunctionsActivityInput): Promise<unknown>;
+  awsStepFunctionsActivity(
+    input: AwsStepFunctionsActivityInput,
+  ): Promise<unknown>;
 };
 
 // =============================================================================
@@ -208,9 +251,7 @@ export interface GraphInterpreterInput {
 /**
  * Build an adjacency list: sourceNodeId → list of outgoing edges.
  */
-function buildAdjacency(
-  edges: WorkflowEdge[]
-): Map<string, WorkflowEdge[]> {
+function buildAdjacency(edges: WorkflowEdge[]): Map<string, WorkflowEdge[]> {
   const adj = new Map<string, WorkflowEdge[]>();
   for (const edge of edges) {
     if (!adj.has(edge.source)) adj.set(edge.source, []);
@@ -223,7 +264,7 @@ function buildAdjacency(
  * Build reverse adjacency: targetNodeId → list of incoming edges.
  */
 function buildReverseAdjacency(
-  edges: WorkflowEdge[]
+  edges: WorkflowEdge[],
 ): Map<string, WorkflowEdge[]> {
   const radj = new Map<string, WorkflowEdge[]>();
   for (const edge of edges) {
@@ -238,7 +279,7 @@ function buildReverseAdjacency(
  */
 function findRoots(
   nodes: WorkflowNode[],
-  radj: Map<string, WorkflowEdge[]>
+  radj: Map<string, WorkflowEdge[]>,
 ): WorkflowNode[] {
   return nodes.filter((n) => !radj.has(n.id) || radj.get(n.id)!.length === 0);
 }
@@ -264,7 +305,7 @@ function getPath(obj: unknown, path: string): unknown {
  */
 function interpolate(
   template: string,
-  context: Record<string, unknown>
+  context: Record<string, unknown>,
 ): string {
   return template.replace(/\{\{([^}]+)\}\}/g, (_m, rawPath: string) => {
     const trimmed = rawPath.trim();
@@ -289,7 +330,7 @@ function interpolate(
  */
 function evalRule(
   rule: { field: string; operator: string; value?: unknown },
-  context: Record<string, unknown>
+  context: Record<string, unknown>,
 ): boolean {
   const rawField = interpolate(rule.field, context);
   const dot = rawField.indexOf(".");
@@ -351,8 +392,11 @@ function evalRule(
  * Evaluate a ConditionGroup deterministically.
  */
 function evalConditionGroup(
-  group: { combinator: string; rules: Array<{ field: string; operator: string; value?: unknown }> },
-  context: Record<string, unknown>
+  group: {
+    combinator: string;
+    rules: Array<{ field: string; operator: string; value?: unknown }>;
+  },
+  context: Record<string, unknown>,
 ): boolean {
   if (group.combinator === "and") {
     return group.rules.every((r) => evalRule(r, context));
@@ -391,9 +435,10 @@ export interface GraphInterpreterOutput {
 }
 
 export async function graphInterpreterWorkflow(
-  input: GraphInterpreterInput
+  input: GraphInterpreterInput,
 ): Promise<GraphInterpreterOutput> {
-  let { executionId, workflowId, template, triggerPayload, environmentId } = input;
+  let { executionId, workflowId, template, triggerPayload, environmentId } =
+    input;
 
   // Build activity proxies using workflow-level settings (or defaults)
   const ws: WorkflowSettings = template.settings ?? {};
@@ -427,6 +472,7 @@ export async function graphInterpreterWorkflow(
     twilioSmsActivity,
     twilioEmailActivity,
     llmPromptActivity,
+    aiAgentActivity,
     prepareSubworkflowActivity,
     mariadbActivity,
     mssqlActivity,
@@ -454,13 +500,17 @@ export async function graphInterpreterWorkflow(
       backoffCoefficient: ws.retry?.backoffCoefficient ?? 2,
       maximumInterval: ws.retry?.maximumInterval ?? "30s",
     },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any);
 
   // When triggered by a Temporal Schedule, executionId is "auto" — create a
   // fresh DB record now so we have a real ID for all subsequent log writes.
   if (executionId === "auto") {
-    executionId = await createExecutionRecordActivity({ workflowId, triggerPayload, environmentId });
+    executionId = await createExecutionRecordActivity({
+      workflowId,
+      triggerPayload,
+      environmentId,
+    });
     log.info(`Auto-created execution record: ${executionId}`);
   }
 
@@ -476,7 +526,10 @@ export async function graphInterpreterWorkflow(
   };
 
   // For subflow mode: when a subflow_output node is reached, record which port fired
-  let subflowOutputResult: { outputIndex: number; data: Record<string, unknown> } | null = null;
+  let subflowOutputResult: {
+    outputIndex: number;
+    data: Record<string, unknown>;
+  } | null = null;
 
   // Track which nodes have finished executing (including merge parking)
   const completedNodes = new Set<string>();
@@ -510,11 +563,14 @@ export async function graphInterpreterWorkflow(
 
     // BFS queue contains { nodeId, incomingEdge } pairs
     // incomingEdge is undefined for root nodes
-    const queue: Array<{ nodeId: string; incomingEdgeSourceHandle?: string; incomingFrom?: string }> =
-      roots.map((n) => ({ nodeId: n.id }));
+    const queue: Array<{
+      nodeId: string;
+      incomingEdgeSourceHandle?: string;
+      incomingFrom?: string;
+    }> = roots.map((n) => ({ nodeId: n.id }));
 
     const nodeMap = new Map<string, WorkflowNode>(
-      template.nodes.map((n) => [n.id, n])
+      template.nodes.map((n) => [n.id, n]),
     );
 
     while (queue.length > 0) {
@@ -522,7 +578,9 @@ export async function graphInterpreterWorkflow(
 
       const node = nodeMap.get(nodeId);
       if (!node) {
-        log.warn(`Node ${nodeId} referenced in queue but not found in template`);
+        log.warn(
+          `Node ${nodeId} referenced in queue but not found in template`,
+        );
         continue;
       }
 
@@ -541,7 +599,9 @@ export async function graphInterpreterWorkflow(
           const arrivedCount = mergeArrivals.get(nodeId)!.size;
 
           if (arrivedCount < expectedCount) {
-            log.info(`Merge node ${nodeId} parked: ${arrivedCount}/${expectedCount} branches`);
+            log.info(
+              `Merge node ${nodeId} parked: ${arrivedCount}/${expectedCount} branches`,
+            );
             continue; // Park — wait for remaining branches
           }
           // All branches arrived — fall through to execute the merge node
@@ -598,21 +658,32 @@ export async function graphInterpreterWorkflow(
           // If started by the webhook handler itself, payload is already set.
           // ------------------------------------------------------------------
           case "webhook": {
-            const hasIncomingPayload = !!(triggerPayload as Record<string, unknown>).webhookPath;
+            const hasIncomingPayload = !!(
+              triggerPayload as Record<string, unknown>
+            ).webhookPath;
             if (hasIncomingPayload) {
               // Execution was triggered by the inbound webhook — use payload directly
               nodeOutput = triggerPayload;
             } else {
               // Execution was started manually — wait for the signal (10 min timeout)
               let webhookData: Record<string, unknown> | null = null;
-              setHandler(webhookPayloadSignal, (payload: Record<string, unknown>) => {
-                webhookData = payload;
-              });
-              log.info(`Webhook node ${nodeId}: waiting for inbound HTTP request…`);
-              const received = await condition(() => webhookData !== null, 10 * 60 * 1000);
+              setHandler(
+                webhookPayloadSignal,
+                (payload: Record<string, unknown>) => {
+                  webhookData = payload;
+                },
+              );
+              log.info(
+                `Webhook node ${nodeId}: waiting for inbound HTTP request…`,
+              );
+              const received = await condition(
+                () => webhookData !== null,
+                10 * 60 * 1000,
+              );
               if (!received) {
                 throw ApplicationFailure.create({
-                  message: "Webhook timeout — no HTTP request received within 10 minutes",
+                  message:
+                    "Webhook timeout — no HTTP request received within 10 minutes",
                   type: "WEBHOOK_TIMEOUT",
                   nonRetryable: true,
                 });
@@ -633,14 +704,22 @@ export async function graphInterpreterWorkflow(
             // Inject credential as Authorization header if credentialId set
             let httpCfg = cfg;
             if ((cfg as any).credentialId) {
-              const cred = await resolveCredentialActivity((cfg as any).credentialId);
+              const cred = await resolveCredentialActivity(
+                (cfg as any).credentialId,
+              );
               const authHeader = cred.token
                 ? { key: "Authorization", value: `Bearer ${cred.token}` }
                 : cred.username && cred.password
-                ? { key: "Authorization", value: `Basic ${Buffer.from(`${cred.username}:${cred.password}`).toString("base64")}` }
-                : cred.headerValue
-                ? { key: cred.headerName ?? "X-Api-Key", value: cred.headerValue }
-                : null;
+                  ? {
+                      key: "Authorization",
+                      value: `Basic ${Buffer.from(`${cred.username}:${cred.password}`).toString("base64")}`,
+                    }
+                  : cred.headerValue
+                    ? {
+                        key: cred.headerName ?? "X-Api-Key",
+                        value: cred.headerValue,
+                      }
+                    : null;
               if (authHeader) {
                 httpCfg = {
                   ...cfg,
@@ -663,7 +742,9 @@ export async function graphInterpreterWorkflow(
             const cfg = node.config as SendEmailConfig;
             let emailCredentials: Record<string, string> | undefined;
             if (cfg.credentialId) {
-              emailCredentials = await resolveCredentialActivity(cfg.credentialId);
+              emailCredentials = await resolveCredentialActivity(
+                cfg.credentialId,
+              );
             }
             nodeOutput = await sendEmailActivity({
               config: cfg,
@@ -742,10 +823,13 @@ export async function graphInterpreterWorkflow(
             const cfg = node.config as SwitchConfig;
             const exprResult = interpolate(cfg.expression, nodeOutputs);
             const matchedCase = cfg.cases.find(
-              (c) => String(c.value) === exprResult
+              (c) => String(c.value) === exprResult,
             );
             const handle = matchedCase?.label ?? cfg.defaultLabel ?? "";
-            nodeOutput = { expressionResult: exprResult, matchedCase: matchedCase?.label };
+            nodeOutput = {
+              expressionResult: exprResult,
+              matchedCase: matchedCase?.label,
+            };
             outgoingHandles = [handle];
             break;
           }
@@ -759,7 +843,9 @@ export async function graphInterpreterWorkflow(
             // For AND-join (mode=all), arrivals has all branch entries.
             const arrivals = mergeArrivals.get(nodeId);
             if (arrivals && arrivals.size > 0) {
-              nodeOutput = Array.from(arrivals).map((srcId) => nodeOutputs[srcId]);
+              nodeOutput = Array.from(arrivals).map(
+                (srcId) => nodeOutputs[srcId],
+              );
             } else if (incomingFrom !== undefined) {
               // OR-join with no arrivals map entry yet — single branch
               nodeOutput = [nodeOutputs[incomingFrom]];
@@ -851,7 +937,10 @@ export async function graphInterpreterWorkflow(
             if (cfg.payload) {
               const interpolated = interpolate(cfg.payload, nodeOutputs);
               try {
-                const parsed = JSON.parse(interpolated) as Record<string, unknown>;
+                const parsed = JSON.parse(interpolated) as Record<
+                  string,
+                  unknown
+                >;
                 if (typeof parsed === "object" && parsed !== null) {
                   childPayload = { ...childPayload, ...parsed };
                 }
@@ -874,14 +963,17 @@ export async function graphInterpreterWorkflow(
               template: prep.template as WorkflowTemplate,
               triggerPayload: prep.triggerPayload,
             };
-            const childResult = await executeChild<typeof graphInterpreterWorkflow>("graphInterpreterWorkflow", {
+            const childResult = await executeChild<
+              typeof graphInterpreterWorkflow
+            >("graphInterpreterWorkflow", {
               workflowId: `exec-${prep.executionId}`,
               taskQueue,
               args: [childInput],
             });
 
             // Route to the handle that corresponds to which subflow_output fired
-            const firedOutputIndex = (childResult as GraphInterpreterOutput)?.outputIndex ?? 0;
+            const firedOutputIndex =
+              (childResult as GraphInterpreterOutput)?.outputIndex ?? 0;
             nodeOutput = {
               subworkflowExecutionId: prep.executionId,
               completed: true,
@@ -897,7 +989,10 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "stop": {
             const cfg = node.config as { message?: string };
-            nodeOutput = { stopped: true, message: cfg.message ?? "Workflow stopped" };
+            nodeOutput = {
+              stopped: true,
+              message: cfg.message ?? "Workflow stopped",
+            };
             // No outgoing handles — BFS ends naturally
             outgoingHandles = [];
             break;
@@ -916,8 +1011,12 @@ export async function graphInterpreterWorkflow(
             // Write any console.log / console.error lines from the sandbox
             for (const line of jsResult.logs) {
               await writeNodeLogActivity({
-                executionId, nodeId, nodeKind: node.kind,
-                level: "info", message: line, data: { source: "console" },
+                executionId,
+                nodeId,
+                nodeKind: node.kind,
+                level: "info",
+                message: line,
+                data: { source: "console" },
               });
             }
             nodeOutput = jsResult.result;
@@ -938,8 +1037,12 @@ export async function graphInterpreterWorkflow(
             // Write any console.log / console.error lines from the sandbox
             for (const line of tsResult.logs) {
               await writeNodeLogActivity({
-                executionId, nodeId, nodeKind: node.kind,
-                level: "info", message: line, data: { source: "console" },
+                executionId,
+                nodeId,
+                nodeKind: node.kind,
+                level: "info",
+                message: line,
+                data: { source: "console" },
               });
             }
             nodeOutput = tsResult.result;
@@ -952,7 +1055,10 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "data_mapper": {
             const cfg = node.config as DataMapperConfig;
-            nodeOutput = await dataMappingActivity({ config: cfg, context: nodeOutputs });
+            nodeOutput = await dataMappingActivity({
+              config: cfg,
+              context: nodeOutputs,
+            });
             outgoingHandles = [""];
             break;
           }
@@ -962,7 +1068,10 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "json_parser": {
             const cfg = node.config as JsonParserConfig;
-            nodeOutput = await jsonParserActivity({ config: cfg, context: nodeOutputs });
+            nodeOutput = await jsonParserActivity({
+              config: cfg,
+              context: nodeOutputs,
+            });
             outgoingHandles = [""];
             break;
           }
@@ -972,7 +1081,10 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "html_template": {
             const cfg = node.config as HtmlTemplateConfig;
-            nodeOutput = await htmlTemplateActivity({ config: cfg, context: nodeOutputs });
+            nodeOutput = await htmlTemplateActivity({
+              config: cfg,
+              context: nodeOutputs,
+            });
             outgoingHandles = [""];
             break;
           }
@@ -982,7 +1094,10 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "crypto_hash": {
             const cfg = node.config as CryptoHashConfig;
-            nodeOutput = await cryptoHashActivity({ config: cfg, context: nodeOutputs });
+            nodeOutput = await cryptoHashActivity({
+              config: cfg,
+              context: nodeOutputs,
+            });
             outgoingHandles = [""];
             break;
           }
@@ -992,7 +1107,10 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "date_formatter": {
             const cfg = node.config as DateFormatterConfig;
-            nodeOutput = await dateFormatterActivity({ config: cfg, context: nodeOutputs });
+            nodeOutput = await dateFormatterActivity({
+              config: cfg,
+              context: nodeOutputs,
+            });
             outgoingHandles = [""];
             break;
           }
@@ -1002,7 +1120,10 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "base64": {
             const cfg = node.config as Base64Config;
-            nodeOutput = await base64Activity({ config: cfg, context: nodeOutputs });
+            nodeOutput = await base64Activity({
+              config: cfg,
+              context: nodeOutputs,
+            });
             outgoingHandles = [""];
             break;
           }
@@ -1069,7 +1190,9 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "s3_bucket": {
             const cfg = node.config as S3BucketConfig;
-            let resolvedCredentials: { accessKeyId?: string; secretAccessKey?: string } | undefined;
+            let resolvedCredentials:
+              | { accessKeyId?: string; secretAccessKey?: string }
+              | undefined;
             if (cfg.credentialId) {
               const cred = await resolveCredentialActivity(cfg.credentialId);
               resolvedCredentials = {
@@ -1110,10 +1233,15 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "ssh_terminal": {
             const cfg = node.config as SshTerminalConfig;
-            let resolvedCredentials: { password?: string; privateKey?: string } | undefined;
+            let resolvedCredentials:
+              | { password?: string; privateKey?: string }
+              | undefined;
             if (cfg.credentialId) {
               const cred = await resolveCredentialActivity(cfg.credentialId);
-              resolvedCredentials = { password: cred.password, privateKey: cred.privateKey };
+              resolvedCredentials = {
+                password: cred.password,
+                privateKey: cred.privateKey,
+              };
             }
             nodeOutput = await sshActivity({
               config: cfg,
@@ -1129,10 +1257,15 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "twilio_sms": {
             const cfg = node.config as TwilioSmsConfig;
-            let resolvedCredentials: { accountSid?: string; authToken?: string } | undefined;
+            let resolvedCredentials:
+              | { accountSid?: string; authToken?: string }
+              | undefined;
             if (cfg.credentialId) {
               const cred = await resolveCredentialActivity(cfg.credentialId);
-              resolvedCredentials = { accountSid: cred.accountSid, authToken: cred.authToken };
+              resolvedCredentials = {
+                accountSid: cred.accountSid,
+                authToken: cred.authToken,
+              };
             }
             nodeOutput = await twilioSmsActivity({
               config: cfg,
@@ -1182,6 +1315,25 @@ export async function graphInterpreterWorkflow(
           }
 
           // ------------------------------------------------------------------
+          // AI Agent (tool-calling loop)
+          // ------------------------------------------------------------------
+          case "ai_agent": {
+            const cfg = node.config as AiAgentConfig;
+            let resolvedApiKey: string | undefined;
+            if (cfg.credentialId) {
+              const cred = await resolveCredentialActivity(cfg.credentialId);
+              resolvedApiKey = cred.apiKey ?? cred.token;
+            }
+            nodeOutput = await aiAgentActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedApiKey,
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
           // Debug — passes through the immediate upstream node's output so
           // the DebugNode on the canvas can display it live.
           // ------------------------------------------------------------------
@@ -1195,7 +1347,9 @@ export async function graphInterpreterWorkflow(
             nodeOutput = upstreamOutput;
             // Write the inspected value to the execution log so it's visible
             await writeNodeLogActivity({
-              executionId, nodeId, nodeKind: node.kind,
+              executionId,
+              nodeId,
+              nodeKind: node.kind,
               level: "debug",
               message: JSON.stringify(upstreamOutput, null, 2),
               data: { source: "debug", label: node.label },
@@ -1230,7 +1384,9 @@ export async function graphInterpreterWorkflow(
             const cfg = node.config as MssqlConfig;
             let resolvedCredentials: Record<string, string> | undefined;
             if (cfg.credentialId) {
-              resolvedCredentials = await resolveCredentialActivity(cfg.credentialId);
+              resolvedCredentials = await resolveCredentialActivity(
+                cfg.credentialId,
+              );
             }
             nodeOutput = await mssqlActivity({
               config: cfg,
@@ -1272,8 +1428,12 @@ export async function graphInterpreterWorkflow(
             // Stream any stderr / print lines from the interpreter into node logs
             for (const line of pyResult.logs) {
               await writeNodeLogActivity({
-                executionId, nodeId, nodeKind: node.kind,
-                level: "info", message: line, data: { source: "stderr" },
+                executionId,
+                nodeId,
+                nodeKind: node.kind,
+                level: "info",
+                message: line,
+                data: { source: "stderr" },
               });
             }
             // Pass through only the user's `result` value to downstream nodes
@@ -1308,7 +1468,9 @@ export async function graphInterpreterWorkflow(
             const cfg = node.config as ApnsPushConfig;
             let resolvedCredentials: Record<string, string> | undefined;
             if (cfg.credentialId) {
-              resolvedCredentials = await resolveCredentialActivity(cfg.credentialId);
+              resolvedCredentials = await resolveCredentialActivity(
+                cfg.credentialId,
+              );
             }
             nodeOutput = await apnsPushActivity({
               config: cfg,
@@ -1365,10 +1527,15 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "response": {
             const cfg = node.config as ResponseConfig;
-            const body = cfg.body ? interpolate(cfg.body, nodeOutputs) : undefined;
+            const body = cfg.body
+              ? interpolate(cfg.body, nodeOutputs)
+              : undefined;
             const headers: Record<string, string> = {};
             for (const h of cfg.headers ?? []) {
-              headers[interpolate(h.key, nodeOutputs)] = interpolate(h.value, nodeOutputs);
+              headers[interpolate(h.key, nodeOutputs)] = interpolate(
+                h.value,
+                nodeOutputs,
+              );
             }
             nodeOutput = {
               _isWebhookResponse: true,
@@ -1388,10 +1555,13 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "trigger_output": {
             const cfg = node.config as TriggerOutputConfig;
-            const rawBody = cfg.body ? interpolate(cfg.body, nodeOutputs) : "{}";
+            const rawBody = cfg.body
+              ? interpolate(cfg.body, nodeOutputs)
+              : "{}";
             let parsed: unknown;
             try {
-              parsed = typeof rawBody === "string" ? JSON.parse(rawBody) : rawBody;
+              parsed =
+                typeof rawBody === "string" ? JSON.parse(rawBody) : rawBody;
             } catch {
               parsed = rawBody; // If not valid JSON, use raw string
             }
@@ -1408,12 +1578,21 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "aws_lambda": {
             const cfg = node.config as AwsLambdaConfig;
-            let resolvedCredentials: { accessKeyId?: string; secretAccessKey?: string } | undefined;
+            let resolvedCredentials:
+              | { accessKeyId?: string; secretAccessKey?: string }
+              | undefined;
             if (cfg.credentialId) {
               const cred = await resolveCredentialActivity(cfg.credentialId);
-              resolvedCredentials = { accessKeyId: cred.accessKeyId, secretAccessKey: cred.secretAccessKey };
+              resolvedCredentials = {
+                accessKeyId: cred.accessKeyId,
+                secretAccessKey: cred.secretAccessKey,
+              };
             }
-            nodeOutput = await awsLambdaActivity({ config: cfg, context: nodeOutputs, resolvedCredentials });
+            nodeOutput = await awsLambdaActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials,
+            });
             outgoingHandles = [""];
             break;
           }
@@ -1423,12 +1602,21 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "aws_sqs": {
             const cfg = node.config as AwsSqsConfig;
-            let resolvedCredentials: { accessKeyId?: string; secretAccessKey?: string } | undefined;
+            let resolvedCredentials:
+              | { accessKeyId?: string; secretAccessKey?: string }
+              | undefined;
             if (cfg.credentialId) {
               const cred = await resolveCredentialActivity(cfg.credentialId);
-              resolvedCredentials = { accessKeyId: cred.accessKeyId, secretAccessKey: cred.secretAccessKey };
+              resolvedCredentials = {
+                accessKeyId: cred.accessKeyId,
+                secretAccessKey: cred.secretAccessKey,
+              };
             }
-            nodeOutput = await awsSqsActivity({ config: cfg, context: nodeOutputs, resolvedCredentials });
+            nodeOutput = await awsSqsActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials,
+            });
             outgoingHandles = [""];
             break;
           }
@@ -1438,12 +1626,21 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "aws_sns": {
             const cfg = node.config as AwsSnsConfig;
-            let resolvedCredentials: { accessKeyId?: string; secretAccessKey?: string } | undefined;
+            let resolvedCredentials:
+              | { accessKeyId?: string; secretAccessKey?: string }
+              | undefined;
             if (cfg.credentialId) {
               const cred = await resolveCredentialActivity(cfg.credentialId);
-              resolvedCredentials = { accessKeyId: cred.accessKeyId, secretAccessKey: cred.secretAccessKey };
+              resolvedCredentials = {
+                accessKeyId: cred.accessKeyId,
+                secretAccessKey: cred.secretAccessKey,
+              };
             }
-            nodeOutput = await awsSnsActivity({ config: cfg, context: nodeOutputs, resolvedCredentials });
+            nodeOutput = await awsSnsActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials,
+            });
             outgoingHandles = [""];
             break;
           }
@@ -1453,12 +1650,21 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "aws_dynamodb": {
             const cfg = node.config as AwsDynamoDBConfig;
-            let resolvedCredentials: { accessKeyId?: string; secretAccessKey?: string } | undefined;
+            let resolvedCredentials:
+              | { accessKeyId?: string; secretAccessKey?: string }
+              | undefined;
             if (cfg.credentialId) {
               const cred = await resolveCredentialActivity(cfg.credentialId);
-              resolvedCredentials = { accessKeyId: cred.accessKeyId, secretAccessKey: cred.secretAccessKey };
+              resolvedCredentials = {
+                accessKeyId: cred.accessKeyId,
+                secretAccessKey: cred.secretAccessKey,
+              };
             }
-            nodeOutput = await awsDynamoDBActivity({ config: cfg, context: nodeOutputs, resolvedCredentials });
+            nodeOutput = await awsDynamoDBActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials,
+            });
             outgoingHandles = [""];
             break;
           }
@@ -1468,12 +1674,21 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "aws_ses": {
             const cfg = node.config as AwsSesConfig;
-            let resolvedCredentials: { accessKeyId?: string; secretAccessKey?: string } | undefined;
+            let resolvedCredentials:
+              | { accessKeyId?: string; secretAccessKey?: string }
+              | undefined;
             if (cfg.credentialId) {
               const cred = await resolveCredentialActivity(cfg.credentialId);
-              resolvedCredentials = { accessKeyId: cred.accessKeyId, secretAccessKey: cred.secretAccessKey };
+              resolvedCredentials = {
+                accessKeyId: cred.accessKeyId,
+                secretAccessKey: cred.secretAccessKey,
+              };
             }
-            nodeOutput = await awsSesActivity({ config: cfg, context: nodeOutputs, resolvedCredentials });
+            nodeOutput = await awsSesActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials,
+            });
             outgoingHandles = [""];
             break;
           }
@@ -1483,12 +1698,21 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "aws_secrets_manager": {
             const cfg = node.config as AwsSecretsManagerConfig;
-            let resolvedCredentials: { accessKeyId?: string; secretAccessKey?: string } | undefined;
+            let resolvedCredentials:
+              | { accessKeyId?: string; secretAccessKey?: string }
+              | undefined;
             if (cfg.credentialId) {
               const cred = await resolveCredentialActivity(cfg.credentialId);
-              resolvedCredentials = { accessKeyId: cred.accessKeyId, secretAccessKey: cred.secretAccessKey };
+              resolvedCredentials = {
+                accessKeyId: cred.accessKeyId,
+                secretAccessKey: cred.secretAccessKey,
+              };
             }
-            nodeOutput = await awsSecretsManagerActivity({ config: cfg, context: nodeOutputs, resolvedCredentials });
+            nodeOutput = await awsSecretsManagerActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials,
+            });
             outgoingHandles = [""];
             break;
           }
@@ -1498,12 +1722,21 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "aws_ssm": {
             const cfg = node.config as AwsSsmConfig;
-            let resolvedCredentials: { accessKeyId?: string; secretAccessKey?: string } | undefined;
+            let resolvedCredentials:
+              | { accessKeyId?: string; secretAccessKey?: string }
+              | undefined;
             if (cfg.credentialId) {
               const cred = await resolveCredentialActivity(cfg.credentialId);
-              resolvedCredentials = { accessKeyId: cred.accessKeyId, secretAccessKey: cred.secretAccessKey };
+              resolvedCredentials = {
+                accessKeyId: cred.accessKeyId,
+                secretAccessKey: cred.secretAccessKey,
+              };
             }
-            nodeOutput = await awsSsmActivity({ config: cfg, context: nodeOutputs, resolvedCredentials });
+            nodeOutput = await awsSsmActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials,
+            });
             outgoingHandles = [""];
             break;
           }
@@ -1513,12 +1746,21 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "aws_eventbridge": {
             const cfg = node.config as AwsEventBridgeConfig;
-            let resolvedCredentials: { accessKeyId?: string; secretAccessKey?: string } | undefined;
+            let resolvedCredentials:
+              | { accessKeyId?: string; secretAccessKey?: string }
+              | undefined;
             if (cfg.credentialId) {
               const cred = await resolveCredentialActivity(cfg.credentialId);
-              resolvedCredentials = { accessKeyId: cred.accessKeyId, secretAccessKey: cred.secretAccessKey };
+              resolvedCredentials = {
+                accessKeyId: cred.accessKeyId,
+                secretAccessKey: cred.secretAccessKey,
+              };
             }
-            nodeOutput = await awsEventBridgeActivity({ config: cfg, context: nodeOutputs, resolvedCredentials });
+            nodeOutput = await awsEventBridgeActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials,
+            });
             outgoingHandles = [""];
             break;
           }
@@ -1528,12 +1770,21 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "aws_step_functions": {
             const cfg = node.config as AwsStepFunctionsConfig;
-            let resolvedCredentials: { accessKeyId?: string; secretAccessKey?: string } | undefined;
+            let resolvedCredentials:
+              | { accessKeyId?: string; secretAccessKey?: string }
+              | undefined;
             if (cfg.credentialId) {
               const cred = await resolveCredentialActivity(cfg.credentialId);
-              resolvedCredentials = { accessKeyId: cred.accessKeyId, secretAccessKey: cred.secretAccessKey };
+              resolvedCredentials = {
+                accessKeyId: cred.accessKeyId,
+                secretAccessKey: cred.secretAccessKey,
+              };
             }
-            nodeOutput = await awsStepFunctionsActivity({ config: cfg, context: nodeOutputs, resolvedCredentials });
+            nodeOutput = await awsStepFunctionsActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials,
+            });
             outgoingHandles = [""];
             break;
           }
@@ -1568,7 +1819,8 @@ export async function graphInterpreterWorkflow(
         for (const edge of outgoingEdges) {
           // If the node produced specific handles (if_else / switch), only
           // follow edges whose sourceHandle matches.
-          const isUnconditional = outgoingHandles.includes("") || outgoingHandles.length === 0;
+          const isUnconditional =
+            outgoingHandles.includes("") || outgoingHandles.length === 0;
           const matchesHandle =
             isUnconditional ||
             (edge.sourceHandle !== undefined &&
@@ -1590,7 +1842,7 @@ export async function graphInterpreterWorkflow(
         const errMsg =
           err instanceof ActivityFailure || err instanceof ApplicationFailure
             ? (err.cause?.message ?? err.message)
-            : (err as Error).message ?? String(err);
+            : ((err as Error).message ?? String(err));
 
         log.error(`Node ${nodeId} (${node.kind}) failed: ${errMsg}`);
 
@@ -1620,11 +1872,15 @@ export async function graphInterpreterWorkflow(
     // one that completed (latest in BFS order). Each parallel execution is isolated in its own
     // Temporal workflow, so concurrent runs never share state.
     const lastNodeId = [...completedNodes].pop();
-    let finalOutput: Record<string, unknown> = lastNodeId ? (nodeOutputs[lastNodeId] as Record<string, unknown>) : {};
+    let finalOutput: Record<string, unknown> = lastNodeId
+      ? (nodeOutputs[lastNodeId] as Record<string, unknown>)
+      : {};
 
     // Scan all completed nodes; keep overwriting so the last trigger_output wins
     for (const completedNodeId of completedNodes) {
-      const out = nodeOutputs[completedNodeId] as Record<string, unknown> | undefined;
+      const out = nodeOutputs[completedNodeId] as
+        | Record<string, unknown>
+        | undefined;
       if (out?._isTriggerOutput) {
         finalOutput = (out.data as Record<string, unknown>) ?? {};
         // Don't break — keep scanning so the last trigger_output in execution order wins
@@ -1655,8 +1911,7 @@ export async function graphInterpreterWorkflow(
       throw err; // Re-throw so Temporal marks the workflow as cancelled
     }
 
-    const errMsg =
-      err instanceof Error ? err.message : String(err);
+    const errMsg = err instanceof Error ? err.message : String(err);
 
     log.error(`Workflow execution ${executionId} failed: ${errMsg}`);
 

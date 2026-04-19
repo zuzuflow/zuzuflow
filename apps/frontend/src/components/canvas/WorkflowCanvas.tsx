@@ -59,6 +59,7 @@ import { SshTerminalNode } from "../nodes/SshTerminalNode";
 import { TwilioSmsNode } from "../nodes/TwilioSmsNode";
 import { TwilioEmailNode } from "../nodes/TwilioEmailNode";
 import { LlmPromptNode } from "../nodes/LlmPromptNode";
+import { AiAgentNode } from "../nodes/AiAgentNode";
 import { SubworkflowCallNode } from "../nodes/SubworkflowCallNode";
 import { SubflowInputNode } from "../nodes/SubflowInputNode";
 import { SubflowOutputNode } from "../nodes/SubflowOutputNode";
@@ -120,6 +121,7 @@ const nodeTypes = {
   custom_code: CustomCodeNode,
   debug: DebugNode,
   llm_prompt: LlmPromptNode,
+  ai_agent: AiAgentNode,
   subworkflow_call: SubworkflowCallNode,
   subflow_input: SubflowInputNode,
   subflow_output: SubflowOutputNode,
@@ -151,8 +153,12 @@ function Canvas(): React.ReactElement {
 
   const nodes = useWorkflowStore((s) => s.nodes);
   const edges = useWorkflowStore((s) => s.edges);
-  const onNodesChange = useWorkflowStore((s) => s.onNodesChange) as OnNodesChange;
-  const onEdgesChange = useWorkflowStore((s) => s.onEdgesChange) as OnEdgesChange;
+  const onNodesChange = useWorkflowStore(
+    (s) => s.onNodesChange,
+  ) as OnNodesChange;
+  const onEdgesChange = useWorkflowStore(
+    (s) => s.onEdgesChange,
+  ) as OnEdgesChange;
   const onConnect = useWorkflowStore((s) => s.onConnect) as OnConnect;
   const selectNode = useWorkflowStore((s) => s.selectNode);
   const selectEdge = useWorkflowStore((s) => s.selectEdge);
@@ -184,7 +190,7 @@ function Canvas(): React.ReactElement {
     (_: React.MouseEvent, node: { id: string }) => {
       selectNode(node.id);
     },
-    [selectNode]
+    [selectNode],
   );
 
   const handlePaneClick = useCallback(() => {
@@ -196,7 +202,7 @@ function Canvas(): React.ReactElement {
     (_: React.MouseEvent, edge: { id: string }) => {
       selectEdge(edge.id);
     },
-    [selectEdge]
+    [selectEdge],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -215,15 +221,19 @@ function Canvas(): React.ReactElement {
         y: e.clientY,
       });
 
-      const subworkflowId = e.dataTransfer.getData("application/subworkflow-id");
+      const subworkflowId = e.dataTransfer.getData(
+        "application/subworkflow-id",
+      );
       if (kind === "subworkflow_call" && subworkflowId) {
-        const configOverride: Partial<SubworkflowCallConfig> = { subworkflowId };
+        const configOverride: Partial<SubworkflowCallConfig> = {
+          subworkflowId,
+        };
         addNode(kind, position, configOverride);
       } else {
         addNode(kind, position);
       }
     },
-    [screenToFlowPosition, addNode]
+    [screenToFlowPosition, addNode],
   );
 
   const miniMapNodeColor = useCallback((node: { type?: string }) => {
@@ -245,7 +255,12 @@ function Canvas(): React.ReactElement {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={handleNodeClick}
-        onEdgeClick={handleEdgeClick as (event: React.MouseEvent, edge: { id: string }) => void}
+        onEdgeClick={
+          handleEdgeClick as (
+            event: React.MouseEvent,
+            edge: { id: string },
+          ) => void
+        }
         onPaneClick={handlePaneClick}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
@@ -263,7 +278,9 @@ function Canvas(): React.ReactElement {
       >
         <MiniMap
           nodeColor={miniMapNodeColor}
-          maskColor={isLight ? "rgba(241, 245, 249, 0.7)" : "rgba(15, 23, 42, 0.7)"}
+          maskColor={
+            isLight ? "rgba(241, 245, 249, 0.7)" : "rgba(15, 23, 42, 0.7)"
+          }
           pannable
           zoomable
         />

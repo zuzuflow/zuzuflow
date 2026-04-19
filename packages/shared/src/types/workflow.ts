@@ -54,6 +54,7 @@ export type NodeKind =
   | "apns_push"
   // ── AI Agents ────────────────────────────────────────────────────────────────
   | "llm_prompt"
+  | "ai_agent"
   // ── Code ─────────────────────────────────────────────────────────────────────
   | "js_runner"
   | "ts_runner"
@@ -367,7 +368,12 @@ export interface MysqlConfig {
   params?: string[];
 }
 
-export type MongoOperation = "findOne" | "find" | "insertOne" | "updateOne" | "deleteOne";
+export type MongoOperation =
+  | "findOne"
+  | "find"
+  | "insertOne"
+  | "updateOne"
+  | "deleteOne";
 
 export interface MongodbConfig {
   credentialId?: string;
@@ -399,7 +405,11 @@ export interface RedisConfig {
   ttl?: number;
 }
 
-export type S3Operation = "getObject" | "putObject" | "listObjects" | "deleteObject";
+export type S3Operation =
+  | "getObject"
+  | "putObject"
+  | "listObjects"
+  | "deleteObject";
 
 export interface S3BucketConfig {
   credentialId?: string;
@@ -423,7 +433,10 @@ export interface S3BucketConfig {
 // Communication node configs
 // =============================================================================
 
-export type RabbitMQOperation = "consume" | "publish_queue" | "publish_exchange";
+export type RabbitMQOperation =
+  | "consume"
+  | "publish_queue"
+  | "publish_exchange";
 
 /** Standard AMQP message properties */
 export interface RabbitMQMessageProperties {
@@ -540,7 +553,12 @@ export interface TwilioEmailConfig {
 // AI Agents node configs
 // =============================================================================
 
-export type LlmProvider = "openai" | "ollama" | "anthropic" | "gemini" | "huggingface";
+export type LlmProvider =
+  | "openai"
+  | "ollama"
+  | "anthropic"
+  | "gemini"
+  | "huggingface";
 
 export interface LlmPromptConfig {
   provider: LlmProvider;
@@ -556,6 +574,34 @@ export interface LlmPromptConfig {
   apiUrl?: string;
   maxTokens?: number;
   temperature?: number;
+}
+
+export type AiAgentToolKind = "http_request" | "js_code" | "json_extract";
+
+export interface AiAgentToolDef {
+  /** Tool name exposed to the LLM */
+  name: string;
+  /** Tool description exposed to the LLM */
+  description: string;
+  /** Built-in executor kind */
+  kind: AiAgentToolKind;
+  /** Kind-specific config (e.g., allowed methods for http_request) */
+  config?: Record<string, unknown>;
+}
+
+export interface AiAgentConfig {
+  provider: LlmProvider;
+  model: string;
+  prompt: string;
+  systemPrompt?: string;
+  credentialId?: string;
+  apiUrl?: string;
+  maxTokens?: number;
+  temperature?: number;
+  /** Tools the agent can call */
+  tools: AiAgentToolDef[];
+  /** Max agentic loop iterations (default 10) */
+  maxIterations: number;
 }
 
 // =============================================================================
@@ -734,7 +780,13 @@ export interface AwsSnsConfig extends AwsBaseConfig {
 }
 
 export interface AwsDynamoDBConfig extends AwsBaseConfig {
-  operation: "getItem" | "putItem" | "updateItem" | "deleteItem" | "query" | "scan";
+  operation:
+    | "getItem"
+    | "putItem"
+    | "updateItem"
+    | "deleteItem"
+    | "query"
+    | "scan";
   /** Table name — supports {{}} interpolation */
   tableName: string;
   /** Key JSON (plain JSON, auto-marshalled) — supports {{}} interpolation */
@@ -780,7 +832,11 @@ export interface AwsSesConfig extends AwsBaseConfig {
 }
 
 export interface AwsSecretsManagerConfig extends AwsBaseConfig {
-  operation: "getSecretValue" | "putSecretValue" | "createSecret" | "deleteSecret";
+  operation:
+    | "getSecretValue"
+    | "putSecretValue"
+    | "createSecret"
+    | "deleteSecret";
   /** Secret name or ARN — supports {{}} interpolation */
   secretId: string;
   /** Secret value for put/create — supports {{}} interpolation */
@@ -790,7 +846,11 @@ export interface AwsSecretsManagerConfig extends AwsBaseConfig {
 }
 
 export interface AwsSsmConfig extends AwsBaseConfig {
-  operation: "getParameter" | "putParameter" | "getParametersByPath" | "deleteParameter";
+  operation:
+    | "getParameter"
+    | "putParameter"
+    | "getParametersByPath"
+    | "deleteParameter";
   /** Parameter name — supports {{}} interpolation */
   name: string;
   /** Parameter value for putParameter — supports {{}} interpolation */
@@ -883,6 +943,7 @@ export type NodeConfig =
   | ApnsPushConfig
   // AI Agents
   | LlmPromptConfig
+  | AiAgentConfig
   // Code
   | JsRunnerConfig
   | TsRunnerConfig

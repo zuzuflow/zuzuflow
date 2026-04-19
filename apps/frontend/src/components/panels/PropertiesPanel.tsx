@@ -1,6 +1,11 @@
 import React, { useState } from "react";
 import { Trash2, X, ChevronDown, ChevronRight } from "lucide-react";
-import type { NodeKind, NodeConfig, NodeStyle, EdgeStyle } from "@workflow/shared";
+import type {
+  NodeKind,
+  NodeConfig,
+  NodeStyle,
+  EdgeStyle,
+} from "@workflow/shared";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { nodeRegistry } from "../../lib/nodeRegistry";
 
@@ -37,6 +42,7 @@ import { SshTerminalForm } from "./forms/SshTerminalForm";
 import { TwilioSmsForm } from "./forms/TwilioSmsForm";
 import { TwilioEmailForm } from "./forms/TwilioEmailForm";
 import { LlmPromptForm } from "./forms/LlmPromptForm";
+import { AiAgentForm } from "./forms/AiAgentForm";
 import { SubworkflowCallForm } from "./forms/SubworkflowCallForm";
 import { SubflowOutputForm } from "./forms/SubflowOutputForm";
 import { MariadbForm } from "./forms/MariadbForm";
@@ -59,128 +65,438 @@ import { AwsEventBridgeForm } from "./forms/AwsEventBridgeForm";
 import { AwsStepFunctionsForm } from "./forms/AwsStepFunctionsForm";
 
 import type {
-  WebhookConfig, CronConfig, MqttConfig, RabbitMQConfig,
-  IfElseConfig, SwitchConfig, DelayConfig, MergeConfig,
-  HttpRequestConfig, SendEmailConfig, PostgresConfig, CustomCodeConfig,
-  WorkflowTriggerInConfig, WorkflowTriggerOutConfig, StopConfig,
-  JsRunnerConfig, TsRunnerConfig, DataMapperConfig, JsonParserConfig, HtmlTemplateConfig,
-  CryptoHashConfig, DateFormatterConfig, Base64Config,
-  MysqlConfig, MongodbConfig, RedisConfig, S3BucketConfig,
-  SlackConfig, SshTerminalConfig, TwilioSmsConfig, TwilioEmailConfig,
-  LlmPromptConfig, SubworkflowCallConfig, SubflowOutputConfig,
-  MariadbConfig, MssqlConfig, GoogleSheetsConfig, PythonRunnerConfig,
-  FirebasePushConfig, ApnsPushConfig, LoopConfig, ResponseConfig, TriggerOutputConfig,
-  AwsLambdaConfig, AwsSqsConfig, AwsSnsConfig, AwsDynamoDBConfig,
-  AwsSesConfig, AwsSecretsManagerConfig, AwsSsmConfig,
-  AwsEventBridgeConfig, AwsStepFunctionsConfig,
+  WebhookConfig,
+  CronConfig,
+  MqttConfig,
+  RabbitMQConfig,
+  IfElseConfig,
+  SwitchConfig,
+  DelayConfig,
+  MergeConfig,
+  HttpRequestConfig,
+  SendEmailConfig,
+  PostgresConfig,
+  CustomCodeConfig,
+  WorkflowTriggerInConfig,
+  WorkflowTriggerOutConfig,
+  StopConfig,
+  JsRunnerConfig,
+  TsRunnerConfig,
+  DataMapperConfig,
+  JsonParserConfig,
+  HtmlTemplateConfig,
+  CryptoHashConfig,
+  DateFormatterConfig,
+  Base64Config,
+  MysqlConfig,
+  MongodbConfig,
+  RedisConfig,
+  S3BucketConfig,
+  SlackConfig,
+  SshTerminalConfig,
+  TwilioSmsConfig,
+  TwilioEmailConfig,
+  LlmPromptConfig,
+  SubworkflowCallConfig,
+  SubflowOutputConfig,
+  MariadbConfig,
+  MssqlConfig,
+  GoogleSheetsConfig,
+  PythonRunnerConfig,
+  FirebasePushConfig,
+  ApnsPushConfig,
+  LoopConfig,
+  ResponseConfig,
+  TriggerOutputConfig,
+  AwsLambdaConfig,
+  AwsSqsConfig,
+  AwsSnsConfig,
+  AwsDynamoDBConfig,
+  AwsSesConfig,
+  AwsSecretsManagerConfig,
+  AwsSsmConfig,
+  AwsEventBridgeConfig,
+  AwsStepFunctionsConfig,
+  AiAgentConfig,
 } from "@workflow/shared";
 
-function renderForm(kind: NodeKind, config: NodeConfig, onChange: (patch: Partial<NodeConfig>) => void): React.ReactElement | null {
+function renderForm(
+  kind: NodeKind,
+  config: NodeConfig,
+  onChange: (patch: Partial<NodeConfig>) => void,
+): React.ReactElement | null {
   switch (kind) {
     case "webhook":
-      return <WebhookForm config={config as WebhookConfig} onChange={onChange as (p: Partial<WebhookConfig>) => void} />;
+      return (
+        <WebhookForm
+          config={config as WebhookConfig}
+          onChange={onChange as (p: Partial<WebhookConfig>) => void}
+        />
+      );
     case "cron":
-      return <CronForm config={config as CronConfig} onChange={onChange as (p: Partial<CronConfig>) => void} />;
+      return (
+        <CronForm
+          config={config as CronConfig}
+          onChange={onChange as (p: Partial<CronConfig>) => void}
+        />
+      );
     case "mqtt_trigger":
-      return <MqttForm config={config as MqttConfig} onChange={onChange as (p: Partial<MqttConfig>) => void} />;
+      return (
+        <MqttForm
+          config={config as MqttConfig}
+          onChange={onChange as (p: Partial<MqttConfig>) => void}
+        />
+      );
     case "if_else":
-      return <IfElseForm config={config as IfElseConfig} onChange={onChange as (p: Partial<IfElseConfig>) => void} />;
+      return (
+        <IfElseForm
+          config={config as IfElseConfig}
+          onChange={onChange as (p: Partial<IfElseConfig>) => void}
+        />
+      );
     case "switch":
-      return <SwitchForm config={config as SwitchConfig} onChange={onChange as (p: Partial<SwitchConfig>) => void} />;
+      return (
+        <SwitchForm
+          config={config as SwitchConfig}
+          onChange={onChange as (p: Partial<SwitchConfig>) => void}
+        />
+      );
     case "delay":
-      return <DelayForm config={config as DelayConfig} onChange={onChange as (p: Partial<DelayConfig>) => void} />;
+      return (
+        <DelayForm
+          config={config as DelayConfig}
+          onChange={onChange as (p: Partial<DelayConfig>) => void}
+        />
+      );
     case "merge":
-      return <MergeForm config={config as MergeConfig} onChange={onChange as (p: Partial<MergeConfig>) => void} />;
+      return (
+        <MergeForm
+          config={config as MergeConfig}
+          onChange={onChange as (p: Partial<MergeConfig>) => void}
+        />
+      );
     case "http_request":
-      return <HttpRequestForm config={config as HttpRequestConfig} onChange={onChange as (p: Partial<HttpRequestConfig>) => void} />;
+      return (
+        <HttpRequestForm
+          config={config as HttpRequestConfig}
+          onChange={onChange as (p: Partial<HttpRequestConfig>) => void}
+        />
+      );
     case "send_email":
-      return <SendEmailForm config={config as SendEmailConfig} onChange={onChange as (p: Partial<SendEmailConfig>) => void} />;
+      return (
+        <SendEmailForm
+          config={config as SendEmailConfig}
+          onChange={onChange as (p: Partial<SendEmailConfig>) => void}
+        />
+      );
     case "postgres_query":
-      return <PostgresForm config={config as PostgresConfig} onChange={onChange as (p: Partial<PostgresConfig>) => void} />;
+      return (
+        <PostgresForm
+          config={config as PostgresConfig}
+          onChange={onChange as (p: Partial<PostgresConfig>) => void}
+        />
+      );
     case "custom_code":
-      return <CustomCodeForm config={config as CustomCodeConfig} onChange={onChange as (p: Partial<CustomCodeConfig>) => void} />;
+      return (
+        <CustomCodeForm
+          config={config as CustomCodeConfig}
+          onChange={onChange as (p: Partial<CustomCodeConfig>) => void}
+        />
+      );
     case "rabbitmq":
-      return <RabbitMQForm config={config as RabbitMQConfig} onChange={onChange as (p: Partial<RabbitMQConfig>) => void} />;
+      return (
+        <RabbitMQForm
+          config={config as RabbitMQConfig}
+          onChange={onChange as (p: Partial<RabbitMQConfig>) => void}
+        />
+      );
     case "workflow_trigger_in":
-      return <WorkflowTriggerInForm config={config as WorkflowTriggerInConfig} onChange={onChange as (p: Partial<WorkflowTriggerInConfig>) => void} />;
+      return (
+        <WorkflowTriggerInForm
+          config={config as WorkflowTriggerInConfig}
+          onChange={onChange as (p: Partial<WorkflowTriggerInConfig>) => void}
+        />
+      );
     case "workflow_trigger_out":
-      return <WorkflowTriggerOutForm config={config as WorkflowTriggerOutConfig} onChange={onChange as (p: Partial<WorkflowTriggerOutConfig>) => void} />;
+      return (
+        <WorkflowTriggerOutForm
+          config={config as WorkflowTriggerOutConfig}
+          onChange={onChange as (p: Partial<WorkflowTriggerOutConfig>) => void}
+        />
+      );
     case "stop":
-      return <StopForm config={config as StopConfig} onChange={onChange as (p: Partial<StopConfig>) => void} />;
+      return (
+        <StopForm
+          config={config as StopConfig}
+          onChange={onChange as (p: Partial<StopConfig>) => void}
+        />
+      );
     case "js_runner":
-      return <JsRunnerForm config={config as JsRunnerConfig} onChange={onChange as (p: Partial<JsRunnerConfig>) => void} />;
+      return (
+        <JsRunnerForm
+          config={config as JsRunnerConfig}
+          onChange={onChange as (p: Partial<JsRunnerConfig>) => void}
+        />
+      );
     case "ts_runner":
-      return <TsRunnerForm config={config as TsRunnerConfig} onChange={onChange as (p: Partial<TsRunnerConfig>) => void} />;
+      return (
+        <TsRunnerForm
+          config={config as TsRunnerConfig}
+          onChange={onChange as (p: Partial<TsRunnerConfig>) => void}
+        />
+      );
     case "data_mapper":
-      return <DataMapperForm config={config as DataMapperConfig} onChange={onChange as (p: Partial<DataMapperConfig>) => void} />;
+      return (
+        <DataMapperForm
+          config={config as DataMapperConfig}
+          onChange={onChange as (p: Partial<DataMapperConfig>) => void}
+        />
+      );
     case "json_parser":
-      return <JsonParserForm config={config as JsonParserConfig} onChange={onChange as (p: Partial<JsonParserConfig>) => void} />;
+      return (
+        <JsonParserForm
+          config={config as JsonParserConfig}
+          onChange={onChange as (p: Partial<JsonParserConfig>) => void}
+        />
+      );
     case "html_template":
-      return <HtmlTemplateForm config={config as HtmlTemplateConfig} onChange={onChange as (p: Partial<HtmlTemplateConfig>) => void} />;
+      return (
+        <HtmlTemplateForm
+          config={config as HtmlTemplateConfig}
+          onChange={onChange as (p: Partial<HtmlTemplateConfig>) => void}
+        />
+      );
     case "crypto_hash":
-      return <CryptoHashForm config={config as CryptoHashConfig} onChange={onChange as (p: Partial<CryptoHashConfig>) => void} />;
+      return (
+        <CryptoHashForm
+          config={config as CryptoHashConfig}
+          onChange={onChange as (p: Partial<CryptoHashConfig>) => void}
+        />
+      );
     case "date_formatter":
-      return <DateFormatterForm config={config as DateFormatterConfig} onChange={onChange as (p: Partial<DateFormatterConfig>) => void} />;
+      return (
+        <DateFormatterForm
+          config={config as DateFormatterConfig}
+          onChange={onChange as (p: Partial<DateFormatterConfig>) => void}
+        />
+      );
     case "base64":
-      return <Base64Form config={config as Base64Config} onChange={onChange as (p: Partial<Base64Config>) => void} />;
+      return (
+        <Base64Form
+          config={config as Base64Config}
+          onChange={onChange as (p: Partial<Base64Config>) => void}
+        />
+      );
     case "mysql":
-      return <MysqlForm config={config as MysqlConfig} onChange={onChange as (p: Partial<MysqlConfig>) => void} />;
+      return (
+        <MysqlForm
+          config={config as MysqlConfig}
+          onChange={onChange as (p: Partial<MysqlConfig>) => void}
+        />
+      );
     case "mongodb":
-      return <MongodbForm config={config as MongodbConfig} onChange={onChange as (p: Partial<MongodbConfig>) => void} />;
+      return (
+        <MongodbForm
+          config={config as MongodbConfig}
+          onChange={onChange as (p: Partial<MongodbConfig>) => void}
+        />
+      );
     case "redis":
-      return <RedisForm config={config as RedisConfig} onChange={onChange as (p: Partial<RedisConfig>) => void} />;
+      return (
+        <RedisForm
+          config={config as RedisConfig}
+          onChange={onChange as (p: Partial<RedisConfig>) => void}
+        />
+      );
     case "s3_bucket":
-      return <S3BucketForm config={config as S3BucketConfig} onChange={onChange as (p: Partial<S3BucketConfig>) => void} />;
+      return (
+        <S3BucketForm
+          config={config as S3BucketConfig}
+          onChange={onChange as (p: Partial<S3BucketConfig>) => void}
+        />
+      );
     case "slack":
-      return <SlackForm config={config as SlackConfig} onChange={onChange as (p: Partial<SlackConfig>) => void} />;
+      return (
+        <SlackForm
+          config={config as SlackConfig}
+          onChange={onChange as (p: Partial<SlackConfig>) => void}
+        />
+      );
     case "ssh_terminal":
-      return <SshTerminalForm config={config as SshTerminalConfig} onChange={onChange as (p: Partial<SshTerminalConfig>) => void} />;
+      return (
+        <SshTerminalForm
+          config={config as SshTerminalConfig}
+          onChange={onChange as (p: Partial<SshTerminalConfig>) => void}
+        />
+      );
     case "twilio_sms":
-      return <TwilioSmsForm config={config as TwilioSmsConfig} onChange={onChange as (p: Partial<TwilioSmsConfig>) => void} />;
+      return (
+        <TwilioSmsForm
+          config={config as TwilioSmsConfig}
+          onChange={onChange as (p: Partial<TwilioSmsConfig>) => void}
+        />
+      );
     case "twilio_email":
-      return <TwilioEmailForm config={config as TwilioEmailConfig} onChange={onChange as (p: Partial<TwilioEmailConfig>) => void} />;
+      return (
+        <TwilioEmailForm
+          config={config as TwilioEmailConfig}
+          onChange={onChange as (p: Partial<TwilioEmailConfig>) => void}
+        />
+      );
     case "llm_prompt":
-      return <LlmPromptForm config={config as LlmPromptConfig} onChange={onChange as (p: Partial<LlmPromptConfig>) => void} />;
+      return (
+        <LlmPromptForm
+          config={config as LlmPromptConfig}
+          onChange={onChange as (p: Partial<LlmPromptConfig>) => void}
+        />
+      );
+    case "ai_agent":
+      return (
+        <AiAgentForm
+          config={config as AiAgentConfig}
+          onChange={onChange as (p: Partial<AiAgentConfig>) => void}
+        />
+      );
     case "subworkflow_call":
-      return <SubworkflowCallForm config={config as SubworkflowCallConfig} onChange={onChange as (p: Partial<SubworkflowCallConfig>) => void} />;
+      return (
+        <SubworkflowCallForm
+          config={config as SubworkflowCallConfig}
+          onChange={onChange as (p: Partial<SubworkflowCallConfig>) => void}
+        />
+      );
     case "subflow_output":
-      return <SubflowOutputForm config={config as SubflowOutputConfig} onChange={onChange as (p: Partial<SubflowOutputConfig>) => void} />;
+      return (
+        <SubflowOutputForm
+          config={config as SubflowOutputConfig}
+          onChange={onChange as (p: Partial<SubflowOutputConfig>) => void}
+        />
+      );
     case "mariadb":
-      return <MariadbForm config={config as MariadbConfig} onChange={onChange as (p: Partial<MariadbConfig>) => void} />;
+      return (
+        <MariadbForm
+          config={config as MariadbConfig}
+          onChange={onChange as (p: Partial<MariadbConfig>) => void}
+        />
+      );
     case "mssql":
-      return <MssqlForm config={config as MssqlConfig} onChange={onChange as (p: Partial<MssqlConfig>) => void} />;
+      return (
+        <MssqlForm
+          config={config as MssqlConfig}
+          onChange={onChange as (p: Partial<MssqlConfig>) => void}
+        />
+      );
     case "google_sheets":
-      return <GoogleSheetsForm config={config as GoogleSheetsConfig} onChange={onChange as (p: Partial<GoogleSheetsConfig>) => void} />;
+      return (
+        <GoogleSheetsForm
+          config={config as GoogleSheetsConfig}
+          onChange={onChange as (p: Partial<GoogleSheetsConfig>) => void}
+        />
+      );
     case "python_runner":
-      return <PythonRunnerForm config={config as PythonRunnerConfig} onChange={onChange as (p: Partial<PythonRunnerConfig>) => void} />;
+      return (
+        <PythonRunnerForm
+          config={config as PythonRunnerConfig}
+          onChange={onChange as (p: Partial<PythonRunnerConfig>) => void}
+        />
+      );
     case "firebase_push":
-      return <FirebasePushForm config={config as FirebasePushConfig} onChange={onChange as (p: Partial<FirebasePushConfig>) => void} />;
+      return (
+        <FirebasePushForm
+          config={config as FirebasePushConfig}
+          onChange={onChange as (p: Partial<FirebasePushConfig>) => void}
+        />
+      );
     case "apns_push":
-      return <ApnsPushForm config={config as ApnsPushConfig} onChange={onChange as (p: Partial<ApnsPushConfig>) => void} />;
+      return (
+        <ApnsPushForm
+          config={config as ApnsPushConfig}
+          onChange={onChange as (p: Partial<ApnsPushConfig>) => void}
+        />
+      );
     case "loop":
-      return <LoopForm config={config as LoopConfig} onChange={onChange as (p: Partial<LoopConfig>) => void} />;
+      return (
+        <LoopForm
+          config={config as LoopConfig}
+          onChange={onChange as (p: Partial<LoopConfig>) => void}
+        />
+      );
     case "response":
-      return <ResponseForm config={config as ResponseConfig} onChange={onChange as (p: Partial<ResponseConfig>) => void} />;
+      return (
+        <ResponseForm
+          config={config as ResponseConfig}
+          onChange={onChange as (p: Partial<ResponseConfig>) => void}
+        />
+      );
     case "trigger_output":
-      return <TriggerOutputForm config={config as TriggerOutputConfig} onChange={onChange as (p: Partial<TriggerOutputConfig>) => void} />;
+      return (
+        <TriggerOutputForm
+          config={config as TriggerOutputConfig}
+          onChange={onChange as (p: Partial<TriggerOutputConfig>) => void}
+        />
+      );
     case "aws_lambda":
-      return <AwsLambdaForm config={config as AwsLambdaConfig} onChange={onChange as (p: Partial<AwsLambdaConfig>) => void} />;
+      return (
+        <AwsLambdaForm
+          config={config as AwsLambdaConfig}
+          onChange={onChange as (p: Partial<AwsLambdaConfig>) => void}
+        />
+      );
     case "aws_sqs":
-      return <AwsSqsForm config={config as AwsSqsConfig} onChange={onChange as (p: Partial<AwsSqsConfig>) => void} />;
+      return (
+        <AwsSqsForm
+          config={config as AwsSqsConfig}
+          onChange={onChange as (p: Partial<AwsSqsConfig>) => void}
+        />
+      );
     case "aws_sns":
-      return <AwsSnsForm config={config as AwsSnsConfig} onChange={onChange as (p: Partial<AwsSnsConfig>) => void} />;
+      return (
+        <AwsSnsForm
+          config={config as AwsSnsConfig}
+          onChange={onChange as (p: Partial<AwsSnsConfig>) => void}
+        />
+      );
     case "aws_dynamodb":
-      return <AwsDynamoDBForm config={config as AwsDynamoDBConfig} onChange={onChange as (p: Partial<AwsDynamoDBConfig>) => void} />;
+      return (
+        <AwsDynamoDBForm
+          config={config as AwsDynamoDBConfig}
+          onChange={onChange as (p: Partial<AwsDynamoDBConfig>) => void}
+        />
+      );
     case "aws_ses":
-      return <AwsSesForm config={config as AwsSesConfig} onChange={onChange as (p: Partial<AwsSesConfig>) => void} />;
+      return (
+        <AwsSesForm
+          config={config as AwsSesConfig}
+          onChange={onChange as (p: Partial<AwsSesConfig>) => void}
+        />
+      );
     case "aws_secrets_manager":
-      return <AwsSecretsManagerForm config={config as AwsSecretsManagerConfig} onChange={onChange as (p: Partial<AwsSecretsManagerConfig>) => void} />;
+      return (
+        <AwsSecretsManagerForm
+          config={config as AwsSecretsManagerConfig}
+          onChange={onChange as (p: Partial<AwsSecretsManagerConfig>) => void}
+        />
+      );
     case "aws_ssm":
-      return <AwsSsmForm config={config as AwsSsmConfig} onChange={onChange as (p: Partial<AwsSsmConfig>) => void} />;
+      return (
+        <AwsSsmForm
+          config={config as AwsSsmConfig}
+          onChange={onChange as (p: Partial<AwsSsmConfig>) => void}
+        />
+      );
     case "aws_eventbridge":
-      return <AwsEventBridgeForm config={config as AwsEventBridgeConfig} onChange={onChange as (p: Partial<AwsEventBridgeConfig>) => void} />;
+      return (
+        <AwsEventBridgeForm
+          config={config as AwsEventBridgeConfig}
+          onChange={onChange as (p: Partial<AwsEventBridgeConfig>) => void}
+        />
+      );
     case "aws_step_functions":
-      return <AwsStepFunctionsForm config={config as AwsStepFunctionsConfig} onChange={onChange as (p: Partial<AwsStepFunctionsConfig>) => void} />;
+      return (
+        <AwsStepFunctionsForm
+          config={config as AwsStepFunctionsConfig}
+          onChange={onChange as (p: Partial<AwsStepFunctionsConfig>) => void}
+        />
+      );
     default:
       return null;
   }
@@ -192,7 +508,7 @@ const inputClass =
 // ─── Handle Position Row ──────────────────────────────────────────────────────
 
 const POSITIONS = ["left", "right", "top", "bottom"] as const;
-type HandleSide = typeof POSITIONS[number];
+type HandleSide = (typeof POSITIONS)[number];
 
 function HandlePositionRow({
   label,
@@ -205,7 +521,9 @@ function HandlePositionRow({
 }): React.ReactElement {
   return (
     <div>
-      <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
+        {label}
+      </span>
       <div className="flex gap-1 mt-1">
         {POSITIONS.map((pos) => (
           <button
@@ -242,31 +560,46 @@ function EdgeAppearancePanel(): React.ReactElement | null {
   return (
     <aside className="w-[360px] h-full bg-card border-l border-border flex flex-col overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-        <span className="text-sm font-semibold text-foreground">Edge Appearance</span>
-        <button onClick={() => selectEdge(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+        <span className="text-sm font-semibold text-foreground">
+          Edge Appearance
+        </span>
+        <button
+          onClick={() => selectEdge(null)}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
           <X size={16} />
         </button>
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <div>
-          <label className="block text-xs font-medium text-muted-foreground mb-1">Color</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">
+            Color
+          </label>
           <div className="flex items-center gap-2">
             <input
               type="color"
               className="w-8 h-8 rounded cursor-pointer bg-muted border border-border"
               value={edgeData.color ?? "#64748b"}
-              onChange={(e) => updateEdgeStyle(selectedEdgeId, { color: e.target.value })}
+              onChange={(e) =>
+                updateEdgeStyle(selectedEdgeId, { color: e.target.value })
+              }
             />
             <input
               type="text"
               className={inputClass + " font-mono text-xs"}
               value={edgeData.color ?? "#64748b"}
-              onChange={(e) => updateEdgeStyle(selectedEdgeId, { color: e.target.value })}
+              onChange={(e) =>
+                updateEdgeStyle(selectedEdgeId, { color: e.target.value })
+              }
             />
             <button
               className="text-[10px] text-muted-foreground hover:text-foreground whitespace-nowrap"
-              onClick={() => updateEdgeStyle(selectedEdgeId, { color: undefined })}
-            >Reset</button>
+              onClick={() =>
+                updateEdgeStyle(selectedEdgeId, { color: undefined })
+              }
+            >
+              Reset
+            </button>
           </div>
         </div>
         <div>
@@ -274,19 +607,30 @@ function EdgeAppearancePanel(): React.ReactElement | null {
             Width: {edgeData.width ?? 2}px
           </label>
           <input
-            type="range" min={1} max={5} step={1}
+            type="range"
+            min={1}
+            max={5}
+            step={1}
             className="w-full"
             value={edgeData.width ?? 2}
-            onChange={(e) => updateEdgeStyle(selectedEdgeId, { width: Number(e.target.value) })}
+            onChange={(e) =>
+              updateEdgeStyle(selectedEdgeId, { width: Number(e.target.value) })
+            }
           />
         </div>
         <div className="flex items-center justify-between">
-          <label className="text-xs font-medium text-muted-foreground">Dashed</label>
+          <label className="text-xs font-medium text-muted-foreground">
+            Dashed
+          </label>
           <button
             className={`w-9 h-5 rounded-full transition-colors relative ${edgeData.dashed ? "bg-indigo-500" : "bg-muted"}`}
-            onClick={() => updateEdgeStyle(selectedEdgeId, { dashed: !edgeData.dashed })}
+            onClick={() =>
+              updateEdgeStyle(selectedEdgeId, { dashed: !edgeData.dashed })
+            }
           >
-            <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${edgeData.dashed ? "translate-x-4" : "translate-x-0"}`} />
+            <span
+              className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${edgeData.dashed ? "translate-x-4" : "translate-x-0"}`}
+            />
           </button>
         </div>
       </div>
@@ -313,7 +657,17 @@ export function PropertiesPanel(): React.ReactElement | null {
   const node = nodes.find((n) => n.id === selectedNodeId);
   if (!node) return null;
 
-  const { kind, label, config, style: nodeStyle } = node.data as { kind: NodeKind; label: string; config: NodeConfig; style?: NodeStyle };
+  const {
+    kind,
+    label,
+    config,
+    style: nodeStyle,
+  } = node.data as {
+    kind: NodeKind;
+    label: string;
+    config: NodeConfig;
+    style?: NodeStyle;
+  };
   const entry = nodeRegistry[kind];
 
   const handleConfigChange = (patch: Partial<NodeConfig>) => {
@@ -333,21 +687,28 @@ export function PropertiesPanel(): React.ReactElement | null {
     if (pos === null) {
       const next = { ...current };
       delete next[kind];
-      updateNodeStyle(selectedNodeId, { handlePositions: Object.keys(next).length ? next : undefined });
+      updateNodeStyle(selectedNodeId, {
+        handlePositions: Object.keys(next).length ? next : undefined,
+      });
     } else {
-      updateNodeStyle(selectedNodeId, { handlePositions: { ...current, [kind]: pos } });
+      updateNodeStyle(selectedNodeId, {
+        handlePositions: { ...current, [kind]: pos },
+      });
     }
   };
 
   return (
-    <aside
-      className="w-[360px] h-full bg-card border-l border-border flex flex-col overflow-hidden"
-    >
+    <aside className="w-[360px] h-full bg-card border-l border-border flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-          <span className="text-sm font-semibold text-foreground">{entry.label}</span>
+          <div
+            className="w-2.5 h-2.5 rounded-full"
+            style={{ backgroundColor: entry.color }}
+          />
+          <span className="text-sm font-semibold text-foreground">
+            {entry.label}
+          </span>
         </div>
         <button
           onClick={() => selectNode(null)}
@@ -361,7 +722,9 @@ export function PropertiesPanel(): React.ReactElement | null {
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
         {/* Label field */}
         <div>
-          <label className="block text-xs font-medium text-muted-foreground mb-1">Label</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">
+            Label
+          </label>
           <input
             type="text"
             className={inputClass}
@@ -383,48 +746,78 @@ export function PropertiesPanel(): React.ReactElement | null {
             className="flex items-center gap-1.5 w-full text-xs font-medium text-muted-foreground hover:text-foreground transition-colors mb-2"
             onClick={() => setAppearanceOpen((v) => !v)}
           >
-            {appearanceOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            {appearanceOpen ? (
+              <ChevronDown size={12} />
+            ) : (
+              <ChevronRight size={12} />
+            )}
             Appearance
           </button>
           {appearanceOpen && (
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Header Color</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  Header Color
+                </label>
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
                     className="w-8 h-8 rounded cursor-pointer bg-muted border border-border"
                     value={headerColor}
-                    onChange={(e) => updateNodeStyle(selectedNodeId, { headerColor: e.target.value })}
+                    onChange={(e) =>
+                      updateNodeStyle(selectedNodeId, {
+                        headerColor: e.target.value,
+                      })
+                    }
                   />
                   <input
                     type="text"
                     className={inputClass + " font-mono text-xs"}
                     value={headerColor}
-                    onChange={(e) => updateNodeStyle(selectedNodeId, { headerColor: e.target.value })}
+                    onChange={(e) =>
+                      updateNodeStyle(selectedNodeId, {
+                        headerColor: e.target.value,
+                      })
+                    }
                   />
                   <button
                     className="text-[10px] text-muted-foreground hover:text-foreground whitespace-nowrap"
-                    onClick={() => updateNodeStyle(selectedNodeId, { headerColor: undefined })}
-                  >Reset</button>
+                    onClick={() =>
+                      updateNodeStyle(selectedNodeId, {
+                        headerColor: undefined,
+                      })
+                    }
+                  >
+                    Reset
+                  </button>
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Icon Override</label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  Icon Override
+                </label>
                 <input
                   type="text"
                   className={inputClass + " text-xs"}
                   value={iconOverride}
-                  onChange={(e) => updateNodeStyle(selectedNodeId, { icon: e.target.value || undefined })}
+                  onChange={(e) =>
+                    updateNodeStyle(selectedNodeId, {
+                      icon: e.target.value || undefined,
+                    })
+                  }
                   placeholder={entry.icon + " (default)"}
                 />
-                <p className="text-[10px] text-muted-foreground/60 mt-0.5">Lucide icon name, e.g. "Zap", "Database"</p>
+                <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                  Lucide icon name, e.g. "Zap", "Database"
+                </p>
               </div>
 
               {/* Handle positions */}
               {(hasTargetHandles || hasSourceHandles) && (
                 <div className="space-y-2.5">
-                  <label className="block text-xs font-medium text-muted-foreground">Handle Positions</label>
+                  <label className="block text-xs font-medium text-muted-foreground">
+                    Handle Positions
+                  </label>
                   {hasTargetHandles && (
                     <HandlePositionRow
                       label="Input"

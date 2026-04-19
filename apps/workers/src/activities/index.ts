@@ -27,10 +27,7 @@ export {
   resolveCredentialActivity,
   resolveVariablesActivity,
 } from "./persistence";
-export type {
-  NodeLogInput,
-  UpdateExecutionStatusInput,
-} from "./persistence";
+export type { NodeLogInput, UpdateExecutionStatusInput } from "./persistence";
 
 // New activities
 export { triggerWorkflowActivity } from "./workflow_trigger";
@@ -40,10 +37,16 @@ export type {
 } from "./workflow_trigger";
 
 export { jsRunnerActivity } from "./js_runner";
-export type { JsRunnerActivityInput, JsRunnerActivityOutput } from "./js_runner";
+export type {
+  JsRunnerActivityInput,
+  JsRunnerActivityOutput,
+} from "./js_runner";
 
 export { tsRunnerActivity } from "./ts_runner";
-export type { TsRunnerActivityInput, TsRunnerActivityOutput } from "./ts_runner";
+export type {
+  TsRunnerActivityInput,
+  TsRunnerActivityOutput,
+} from "./ts_runner";
 
 export {
   dataMappingActivity,
@@ -98,7 +101,10 @@ export { llmPromptActivity } from "./llm";
 export type { LlmPromptActivityInput, LlmPromptActivityOutput } from "./llm";
 
 export { prepareSubworkflowActivity } from "./subworkflow";
-export type { PrepareSubworkflowInput, PrepareSubworkflowOutput } from "./subworkflow";
+export type {
+  PrepareSubworkflowInput,
+  PrepareSubworkflowOutput,
+} from "./subworkflow";
 
 export { mariadbActivity } from "./mariadb";
 export type { MariadbActivityInput, MariadbActivityOutput } from "./mariadb";
@@ -107,16 +113,28 @@ export { mssqlActivity } from "./mssql";
 export type { MssqlActivityInput, MssqlActivityOutput } from "./mssql";
 
 export { googleSheetsActivity } from "./google_sheets";
-export type { GoogleSheetsActivityInput, GoogleSheetsActivityOutput } from "./google_sheets";
+export type {
+  GoogleSheetsActivityInput,
+  GoogleSheetsActivityOutput,
+} from "./google_sheets";
 
 export { pythonRunnerActivity } from "./python_runner";
-export type { PythonRunnerActivityInput, PythonRunnerActivityOutput } from "./python_runner";
+export type {
+  PythonRunnerActivityInput,
+  PythonRunnerActivityOutput,
+} from "./python_runner";
 
 export { firebasePushActivity } from "./firebase_push";
-export type { FirebasePushActivityInput, FirebasePushActivityOutput } from "./firebase_push";
+export type {
+  FirebasePushActivityInput,
+  FirebasePushActivityOutput,
+} from "./firebase_push";
 
 export { apnsPushActivity } from "./apns_push";
-export type { ApnsPushActivityInput, ApnsPushActivityOutput } from "./apns_push";
+export type {
+  ApnsPushActivityInput,
+  ApnsPushActivityOutput,
+} from "./apns_push";
 
 // AWS Cloud activities
 export { awsLambdaActivity } from "./aws_lambda";
@@ -145,3 +163,6 @@ export type { AwsEventBridgeActivityInput } from "./aws_eventbridge";
 
 export { awsStepFunctionsActivity } from "./aws_step_functions";
 export type { AwsStepFunctionsActivityInput } from "./aws_step_functions";
+
+export { aiAgentActivity } from "./aiAgent";
+export type { AiAgentActivityInput, AiAgentActivityOutput } from "./aiAgent";
