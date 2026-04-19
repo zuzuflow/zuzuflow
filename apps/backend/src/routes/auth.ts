@@ -1042,19 +1042,71 @@ AI:
 CODE:
 - "js_runner": Run JavaScript. Config: { "code": "return data;" }
 
-LAYOUT RULES:
-- Place nodes left-to-right with ~250px horizontal spacing
-- Start triggers at x:100, y:200
-- For branches (if_else), offset true/false paths vertically by ±100px
-- Each node needs a unique id (use descriptive names like "trigger_1", "http_1", etc.)
-- Connect nodes with edges using sourceHandle "out" and targetHandle "in"
-- For if_else nodes, use sourceHandle "true" or "false" instead of "out"
+LAYOUT RULES (enterprise-grade — treat this as non-negotiable):
 
-IMPORTANT: 
-- Return ONLY valid JSON, no markdown code fences, no explanation text
-- Every workflow MUST start with exactly one trigger node
-- Use "credentialId": "" for nodes that need credentials (user will configure these after)
-- Use template expressions like {{nodeId.data.field}} for dynamic data between nodes`;
+Pick ONE layout direction and apply it uniformly to EVERY node in the graph.
+
+1. HORIZONTAL (left → right) — DEFAULT for linear or lightly-branching flows.
+   - Start at x: 120, y: 240. Horizontal gap BETWEEN COLUMNS: 320px (node box is ~240px wide, leaving ~80px for the edge).
+   - Main path: every node shares the same y. Align all y values to multiples of 20.
+   - On EVERY node emit:
+     "style": { "handlePositions": { "input": "left", "output": "right" } }
+   - Branches (if_else, switch, subworkflow_call, or any multi-output custom_builder):
+     * The branch node itself sits on the main lane (y=240).
+     * Place each branch target in its own lane: y = 240 + laneIndex * 160, where laneIndex ∈ {-1, +1, -2, +2, ...}.
+     * When branches reconverge via a "merge" node, put merge back on y=240 after the longest branch finishes.
+   - x of node N = 120 + N * 320, using column order from the topological sort.
+
+2. VERTICAL (top → bottom) — use ONLY when there are 4+ parallel branches or a deep decision tree.
+   - Start at x: 400, y: 80. Vertical gap: 180px. Horizontal gap between sibling branches: 320px.
+   - DO NOT emit handlePositions (top/bottom are the registry defaults — leaving style off is correct).
+
+CONSISTENCY (must hold):
+- Every node in the workflow uses the same direction. Never mix.
+- x and y values are integers, snapped to multiples of 20.
+- No two nodes share the same (x, y).
+- No edge crosses through a node box.
+
+IDs: use "<kind>_<n>" starting at 1 per kind — "trigger_1", "http_1", "slack_1", "if_1".
+
+EDGES:
+- For linear hops, omit sourceHandle (it defaults to "out").
+- For if_else, set sourceHandle to "true" or "false".
+- For switch, set sourceHandle to the matching case value.
+- For subworkflow_call with multiple outputs, set sourceHandle to "output_0", "output_1", ...
+- For a multi-output custom_builder node, set sourceHandle to the output handle id declared on the template.
+- Do not set targetHandle — every node has a single implicit input handle.
+
+EXAMPLE (horizontal, 3-node linear flow — copy this shape exactly):
+{
+  "version": "1.0",
+  "nodes": [
+    { "id": "trigger_1", "kind": "webhook", "label": "Webhook",
+      "config": { "path": "summarize", "method": "POST", "auth": { "type": "none" } },
+      "position": { "x": 120, "y": 240 },
+      "style": { "handlePositions": { "input": "left", "output": "right" } } },
+    { "id": "llm_1", "kind": "llm_prompt", "label": "Summarize",
+      "config": { "provider": "gemini", "model": "gemini-2.5-flash-lite",
+                  "credentialId": "", "systemPrompt": "", "userPrompt": "{{trigger_1.data.text}}" },
+      "position": { "x": 440, "y": 240 },
+      "style": { "handlePositions": { "input": "left", "output": "right" } } },
+    { "id": "response_1", "kind": "response", "label": "Respond",
+      "config": { "statusCode": 200, "body": "{{llm_1.data.result}}" },
+      "position": { "x": 760, "y": 240 },
+      "style": { "handlePositions": { "input": "left", "output": "right" } } }
+  ],
+  "edges": [
+    { "id": "e_1", "source": "trigger_1", "target": "llm_1" },
+    { "id": "e_2", "source": "llm_1", "target": "response_1" }
+  ]
+}
+
+IMPORTANT:
+- Return ONLY valid JSON, no markdown code fences, no explanation text.
+- Every workflow MUST start with exactly one trigger node.
+- Use "credentialId": "" for nodes that need credentials (user will configure these after).
+- Use template expressions like {{nodeId.data.field}} for dynamic data between nodes.
+- Every node MUST have a "position" object. Horizontal-mode nodes MUST include the "style.handlePositions" override shown above.`;
 }
 
 function buildUserPrompt(

@@ -92,13 +92,37 @@ const nodeKindSchema = z.enum([
   "aws_step_functions",
 ]);
 
+const handlePositionEnum = z.enum(["left", "right", "top", "bottom"]);
+
+const nodeStyleSchema = z
+  .object({
+    headerColor: z.string().optional(),
+    icon: z.string().optional(),
+    handlePositions: z
+      .object({
+        input: handlePositionEnum.optional(),
+        output: handlePositionEnum.optional(),
+      })
+      .optional(),
+  })
+  .optional();
+
 const workflowNodeSchema = z.object({
   id: z.string().min(1),
   kind: nodeKindSchema,
   label: z.string().min(1),
   config: z.record(z.unknown()),
   position: z.object({ x: z.number(), y: z.number() }).optional(),
+  style: nodeStyleSchema,
 });
+
+const edgeStyleSchema = z
+  .object({
+    color: z.string().optional(),
+    width: z.number().optional(),
+    dashed: z.boolean().optional(),
+  })
+  .optional();
 
 const workflowEdgeSchema = z.object({
   id: z.string().min(1),
@@ -106,6 +130,7 @@ const workflowEdgeSchema = z.object({
   target: z.string().min(1),
   sourceHandle: z.string().optional(),
   label: z.string().optional(),
+  style: edgeStyleSchema,
 });
 
 const workflowTemplateSchema = z
