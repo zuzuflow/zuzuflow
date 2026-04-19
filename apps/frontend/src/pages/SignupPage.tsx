@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
-import { Eye, EyeOff, Loader2, UserPlus } from "lucide-react";
+import { Eye, EyeOff, Loader2, UserPlus, Lock } from "lucide-react";
+import { useSignupStatus } from "@/hooks/useSignupStatus";
 import { motion, AnimatePresence } from "framer-motion";
 import { Logo } from "@/components/branding/Logo";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ export function SignupPage(): React.ReactElement {
   // personal one.
   const inviteToken = searchParams.get("invite") || undefined;
   const prefilledEmail = searchParams.get("email") || "";
+  const { enabled: signupEnabled, loading: signupStatusLoading } = useSignupStatus();
 
   const [orgName, setOrgName] = useState("");
   const [username, setUsername] = useState("");
@@ -65,6 +67,36 @@ export function SignupPage(): React.ReactElement {
       setLoading(false);
     }
   };
+
+  // Public signup may be disabled on self-hosted instances. An invite token
+  // bypasses this — invited users can still create their account through the
+  // flow. Show a friendly "disabled" state only when BOTH conditions hold.
+  if (!signupStatusLoading && !signupEnabled && !inviteToken) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <div className="max-w-md w-full rounded-xl border border-border bg-card p-8 text-center">
+          <div className="flex justify-center mb-4">
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+              <Lock size={20} className="text-muted-foreground" />
+            </div>
+          </div>
+          <h1 className="text-xl font-semibold text-foreground mb-2">
+            Signup is disabled
+          </h1>
+          <p className="text-sm text-muted-foreground mb-5">
+            This ZuzuFlow instance doesn't allow public signups. Contact your
+            administrator for access — they can invite you from Settings → Users.
+          </p>
+          <Link
+            to="/login"
+            className="inline-block px-4 py-2 text-sm font-medium rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            Back to login
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex">

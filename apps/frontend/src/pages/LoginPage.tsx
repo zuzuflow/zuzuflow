@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
+import { useSignupStatus } from "@/hooks/useSignupStatus";
 import {
   Eye,
   EyeOff,
@@ -625,6 +626,7 @@ export function LoginPage(): React.ReactElement {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const inviteToken = searchParams.get("invite");
+  const { enabled: signupEnabled } = useSignupStatus();
   const [usernameOrEmail, setUsernameOrEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -865,15 +867,17 @@ export function LoginPage(): React.ReactElement {
                       </Button>
                     </motion.div>
 
-                    <p className="text-center text-sm text-muted-foreground">
-                      Don't have an account?{" "}
-                      <Link
-                        to="/signup"
-                        className="text-primary hover:underline font-medium"
-                      >
-                        Sign up
-                      </Link>
-                    </p>
+                    {signupEnabled && (
+                      <p className="text-center text-sm text-muted-foreground">
+                        Don't have an account?{" "}
+                        <Link
+                          to="/signup"
+                          className="text-primary hover:underline font-medium"
+                        >
+                          Sign up
+                        </Link>
+                      </p>
+                    )}
                   </div>
                 </div>
               </motion.div>

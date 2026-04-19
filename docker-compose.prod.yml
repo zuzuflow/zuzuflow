@@ -163,6 +163,9 @@ services:
       TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:-temporal:7233}
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
       TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-workflow-interpreter}
+      # Optional multi-queue config — workers only. When set, the process polls
+      # every listed queue in parallel. Blank → single-queue (default).
+      TEMPORAL_TASK_QUEUES: ${TEMPORAL_TASK_QUEUES:-}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET}
       LOG_LEVEL: ${LOG_LEVEL:-info}

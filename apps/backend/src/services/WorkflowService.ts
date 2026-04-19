@@ -8,6 +8,7 @@ import { logger } from "../logger";
 import { getTemporalClient } from "../temporal/client";
 import { config } from "../config";
 import { tagService } from "./TagService";
+import { taskQueueResolver } from "./TaskQueueResolver";
 import type { WorkflowTemplate, WorkflowNode, WorkflowEdge, CronConfig } from "@workflow/shared";
 
 // =============================================================================
@@ -555,8 +556,16 @@ export class WorkflowService {
     // Each schedule fire creates its own execution record via a sentinel value.
     // GraphInterpreter will call createExecutionRecordActivity when it sees
     // executionId === "auto".
-    // Fetch the workflow's environmentId for the schedule args
-    const wf = await prisma.workflow.findUnique({ where: { id: workflowId }, select: { environmentId: true } });
+    // Fetch the workflow's environment + its org so we can resolve the right
+    // task queue for the schedule (matches runtime routing used in
+    // ExecutionService.startExecution).
+    const wf = await prisma.workflow.findUnique({
+      where: { id: workflowId },
+      select: {
+        environmentId: true,
+        environment: { select: { organizationId: true } },
+      },
+    });
     const scheduleArgs = [{
       executionId: "auto",
       workflowId,
@@ -564,6 +573,10 @@ export class WorkflowService {
       triggerPayload: { source: "cron", expression: cfg.expression },
       environmentId: wf?.environmentId,
     }];
+
+    const taskQueue = await taskQueueResolver.resolveTaskQueue(
+      wf?.environment?.organizationId,
+    );
 
     try {
       await temporal.schedule.create({
@@ -575,7 +588,7 @@ export class WorkflowService {
         action: {
           type: "startWorkflow",
           workflowType: "graphInterpreterWorkflow",
-          taskQueue: config.TEMPORAL_TASK_QUEUE,
+          taskQueue,
           args: scheduleArgs,
         },
         policies: {

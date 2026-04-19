@@ -5,6 +5,7 @@ import { prisma } from "../db/client";
 import { getTemporalClient } from "../temporal/client";
 import { config } from "../config";
 import { logger } from "../logger";
+import { taskQueueResolver } from "./TaskQueueResolver";
 import type { WorkflowTemplate } from "@workflow/shared";
 
 // =============================================================================
@@ -24,9 +25,14 @@ export class ExecutionService {
   async startExecution(input: StartExecutionInput) {
     const { workflowId, triggerPayload = {}, environmentId } = input;
 
-    // Load and verify the workflow exists and is active
+    // Load the workflow along with its environment → org chain so we can
+    // resolve which Temporal task queue this execution should land on (see
+    // TaskQueueResolver).
     const workflow = await prisma.workflow.findUnique({
       where: { id: workflowId },
+      include: {
+        environment: { select: { organizationId: true } },
+      },
     });
     if (!workflow) {
       throw Object.assign(new Error(`Workflow ${workflowId} not found`), {
@@ -58,8 +64,11 @@ export class ExecutionService {
       const template = workflow.template as unknown as WorkflowTemplate;
       const ws = template.settings ?? {};
 
+      const taskQueue = await taskQueueResolver.resolveTaskQueue(
+        workflow.environment?.organizationId,
+      );
       const startOptions: Record<string, unknown> = {
-        taskQueue: config.TEMPORAL_TASK_QUEUE,
+        taskQueue,
         workflowId: temporalWorkflowId,
         args: [
           {

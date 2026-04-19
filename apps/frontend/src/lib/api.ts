@@ -1181,6 +1181,17 @@ export function declineInviteById(inviteId: string): Promise<void> {
   });
 }
 
+/**
+ * Unauthenticated — check whether public signup is enabled on this instance.
+ * Self-hosted installs usually set SIGNUP_ENABLED=false, in which case the
+ * frontend should hide the "Sign up" CTA on the Login page.
+ */
+export async function getSignupStatus(): Promise<{ enabled: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/auth/signup-status`);
+  if (!res.ok) return { enabled: true }; // fail-open: existing behavior
+  return res.json() as Promise<{ enabled: boolean }>;
+}
+
 /** Unauthenticated — preview an invite by its raw token. For /invite/:token page. */
 export async function getPublicInvite(token: string): Promise<PublicInvitePreview> {
   const res = await fetch(`${API_BASE_URL}/auth/invites/public/${token}`);

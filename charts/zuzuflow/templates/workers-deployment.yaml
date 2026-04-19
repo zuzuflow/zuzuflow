@@ -48,6 +48,12 @@ spec:
                 name: {{ include "zuzuflow.configMapName" . }}
             - secretRef:
                 name: {{ include "zuzuflow.secretName" . }}
+          {{- if .Values.temporalTaskQueues }}
+          # Multi-queue — only set on workers (backend doesn't need it).
+          env:
+            - name: TEMPORAL_TASK_QUEUES
+              value: {{ join "," .Values.temporalTaskQueues | quote }}
+          {{- end }}
           resources:
             {{- toYaml .Values.workers.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

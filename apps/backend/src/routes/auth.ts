@@ -210,6 +210,17 @@ authRouter.post("/refresh", requireAuth, (req: Request, res: Response) => {
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
+// GET /api/auth/signup-status — unauth public probe.
+//
+// Frontend uses this on the Login + Signup pages to decide whether to show
+// the "Sign up" link / form. Kept separate from /signup so the check itself
+// never incurs a DB write.
+// ---------------------------------------------------------------------------
+authRouter.get("/signup-status", (_req: Request, res: Response) => {
+  res.json({ enabled: !!config.SIGNUP_ENABLED });
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/auth/invites/public/:token — unauth public invite preview
 //
 // Used by the /invite/:token landing page to render "Alice invited you to Acme"
@@ -230,16 +241,29 @@ authRouter.get("/invites/public/:token", async (req: Request, res: Response) => 
 // POST /api/auth/signup  { username, email, password } → { token, user, organization }
 // ---------------------------------------------------------------------------
 authRouter.post("/signup", async (req: Request, res: Response) => {
-  if (!config.SIGNUP_ENABLED) {
-    return res.status(403).json({ error: "Signup is disabled" });
-  }
-
   const { username, email, password, inviteToken } = req.body as {
     username?: string;
     email?: string;
     password?: string;
     inviteToken?: string;
   };
+
+  // Public signup gate. An invite token bypasses this — invites are an
+  // admin-driven path, not public. We validate the token here (before touching
+  // any user record) so a bogus token can't be used to sneak past the gate.
+  if (!config.SIGNUP_ENABLED) {
+    if (!inviteToken) {
+      return res.status(403).json({ error: "Signup is disabled" });
+    }
+    try {
+      await inviteService.resolveInvite(inviteToken);
+    } catch {
+      return res.status(403).json({
+        error: "Signup is disabled. A valid invite is required to create an account on this instance.",
+      });
+    }
+  }
+
   if (!username || !email || !password) {
     return res
       .status(400)

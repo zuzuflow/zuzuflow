@@ -14,6 +14,10 @@ const envSchema = z.object({
   TEMPORAL_ADDRESS: z.string().default("localhost:7233"),
   TEMPORAL_NAMESPACE: z.string().default("default"),
   TEMPORAL_TASK_QUEUE: z.string().default("workflow-interpreter"),
+  // Optional comma-separated list. When set, overrides TEMPORAL_TASK_QUEUE and
+  // the worker process polls all listed queues in parallel.
+  // Example: "shared-free,premium-pool,org-abc123"
+  TEMPORAL_TASK_QUEUES: z.string().optional(),
   TEMPORAL_TLS_CERT_PATH: z.string().optional(),
   TEMPORAL_TLS_KEY_PATH: z.string().optional(),
 

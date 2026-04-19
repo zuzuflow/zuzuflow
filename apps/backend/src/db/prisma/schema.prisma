@@ -534,6 +534,17 @@ model Plan {
   maxTeamMembers     Int?
   maxStorageMb       Int?
 
+  // Worker tier — informational metadata for admin provisioning logic.
+  // The app doesn't enforce these; it just reads defaultTaskQueue below.
+  workerTier          String? @default("shared")     // "shared" | "dedicated"
+  workerCpuMillicores Int?                            // e.g. 250 = 0.25 CPU
+  workerMemoryMb      Int?                            // e.g. 1024 = 1 GB
+  workerReplicas      Int?    @default(1)
+
+  // If set, orgs on this plan route executions to this queue by default.
+  // Null → falls back to config.TEMPORAL_TASK_QUEUE.
+  defaultTaskQueue    String?
+
   priceMonthly Int?            // cents
   priceYearly  Int?            // cents
 
@@ -561,6 +572,11 @@ model OrgPlan {
   overrideMaxEnvironments    Int?
   overrideMaxTeamMembers     Int?
   overrideMaxStorageMb       Int?
+
+  // Per-org Temporal task queue. Admin writes this after provisioning a
+  // dedicated worker for the org. Null → falls back to plan.defaultTaskQueue
+  // → config.TEMPORAL_TASK_QUEUE.
+  taskQueueOverride          String?
 
   startsAt  DateTime  @default(now())
   expiresAt DateTime?

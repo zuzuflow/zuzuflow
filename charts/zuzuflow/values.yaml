@@ -33,9 +33,13 @@ appUrl: "http://localhost"
 # Comma-separated origins the backend will allow. Blank → defaults to appUrl.
 corsOrigins: ""
 
-# Allow new users to self-register. Set false to restrict signups to existing
-# admins' invite flow only.
-signupEnabled: true
+# Allow new users to self-register. Defaults to false because self-hosted
+# installs usually shouldn't expose a public signup form. The seeded
+# INITIAL_ADMIN can invite team members from Settings → Users, and invited
+# users bypass this flag via their one-time token.
+#
+# Set to true if you're running a public SaaS and want open registration.
+signupEnabled: false
 
 # ─── Initial superadmin ──────────────────────────────────────────────────────
 # Seeded on first boot when the users table is empty. After that, rotate the
@@ -116,6 +120,13 @@ externalTemporal:
 
 temporalNamespace: default
 temporalTaskQueue: workflow-interpreter
+
+# Optional multi-queue workers — blank / empty list → single queue (default).
+# When set, the workers process polls every listed queue in parallel.
+# The backend routes per-org executions automatically via
+# OrgPlan.taskQueueOverride; this just decides what the worker listens on.
+# Example: ["workflow-interpreter", "premium-pool", "org-abc"]
+temporalTaskQueues: []
 
 # ─── Temporal UI (admin-only — disable in production unless behind auth) ────
 temporalUi:
