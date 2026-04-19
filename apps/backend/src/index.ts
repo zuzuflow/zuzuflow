@@ -7,7 +7,7 @@ import { config } from "./config";
 import { logger } from "./logger";
 import { workflowRouter } from "./routes/workflows";
 import { executionRouter } from "./routes/executions";
-import { webhookRouter } from "./routes/webhooks";
+import { webhookRouter, inboundWebhookRouter } from "./routes/webhooks";
 import { internalRouter } from "./routes/internal";
 import { credentialRouter } from "./routes/credentials";
 import { variableRouter } from "./routes/variables";
@@ -77,8 +77,11 @@ app.get("/health", (_req, res) => {
 // Auth (login / refresh) — must come before requireAuth
 app.use("/api/auth", authRouter);
 
-// Inbound webhooks are verified by HMAC, not bearer token
-app.use("/api/webhooks/inbound", webhookRouter);
+// Inbound webhooks are verified by per-endpoint auth (none / HMAC / basic /
+// JWT), not the platform bearer token. Mount the dedicated inbound router —
+// it's a tiny wrapper whose internal path is "/*" so the mount prefix maps
+// cleanly to /api/webhooks/inbound/<your-path>.
+app.use("/api/webhooks/inbound", inboundWebhookRouter);
 
 // Internal worker callbacks (not exposed to the internet in production)
 app.use("/internal", internalRouter);

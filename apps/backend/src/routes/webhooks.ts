@@ -68,12 +68,20 @@ webhookRouter.delete("/:id", async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
-// ALL /webhooks/inbound/:path(*) — inbound webhook handler
-// Supports any HTTP method; the method check is done inside handleInbound.
+// Inbound webhook router — mounted PUBLICLY at /api/webhooks/inbound in
+// index.ts (before requireAuth). Kept as a separate router so the CRUD
+// above can still be mounted protected at /api/env/:envSlug/webhooks
+// without exposing /register or /:id publicly, and so the inbound matcher
+// is relative to a correct base URL (previously the router was mounted
+// at /api/webhooks/inbound but its internal route was /inbound/* — the
+// double prefix meant no request ever matched, and the request fell
+// through to the protected /api mount, producing "missing token" even
+// for webhooks configured with auth.type === "none").
 // ---------------------------------------------------------------------------
-webhookRouter.all("/inbound/*", async (req: Request, res: Response) => {
-  // Extract the dynamic path segment after /inbound/
-  // e.g. /webhooks/inbound/my-service/orders => "my-service/orders"
+export const inboundWebhookRouter: import("express").Router = Router();
+
+inboundWebhookRouter.all("/*", async (req: Request, res: Response) => {
+  // Whatever follows /api/webhooks/inbound/ — e.g. "my-service/orders".
   const inboundPath = req.params[0] || "";
 
   try {
