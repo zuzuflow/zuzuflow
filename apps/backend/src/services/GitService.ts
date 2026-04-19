@@ -10,13 +10,20 @@ import { generateWorkflowKey } from "./WorkflowService";
 // GitService — push/pull workflow definitions to/from a remote git repository
 //
 // Layout in the repo:
-//   workflows/
-//     <folder-path>/
-//       <workflow-name>.json       (WorkflowTemplate JSON)
+//   zuzuflow/
+//     workflows/
+//       <environment-slug>/
+//         <folder-path>/
+//           <workflow-name>.json   (WorkflowTemplate JSON)
+//         folders.json             (per-env folder manifest)
 //
-// Root-level workflows go directly under workflows/.
-// Folder hierarchy is reflected as directories.
+// Each environment lives in its own subtree so production / staging / dev stay
+// cleanly separated in git history and diffs. Root-level workflows go directly
+// under `<environment-slug>/`.
 // =============================================================================
+
+const REPO_ROOT = "zuzuflow";
+const WORKFLOWS_DIR = "workflows";
 
 export type GitProvider = "github" | "bitbucket" | "gitlab" | "custom";
 
@@ -83,8 +90,10 @@ function mkdirp(dir: string) {
 
 // ─── Build folder path map ────────────────────────────────────────────────────
 
-async function buildFolderPaths(): Promise<Map<string, string>> {
-  const folders = await prisma.folder.findMany();
+/** Resolve every folder's full path (slash-separated). Scoped to the given
+ *  environment so two envs with identically-named folders don't collide. */
+async function buildFolderPaths(environmentId: string): Promise<Map<string, string>> {
+  const folders = await prisma.folder.findMany({ where: { environmentId } });
   const nameMap = new Map(folders.map((f) => [f.id, { name: f.name, parentId: f.parentId }]));
 
   function resolvePath(id: string): string {
@@ -239,48 +248,77 @@ export class GitService {
     // Fetch so we can merge/rebase — ignore errors (empty repo)
     try { await git.fetch("origin", cfg.branch); } catch { /* first push */ }
 
-    // Write all workflow files
+    // Fetch envs first so we can group by them, and to have their slugs handy
+    // for directory names.
+    const environments = await prisma.environment.findMany({
+      orderBy: { slug: "asc" },
+    });
+    const envById = new Map(environments.map((e: any) => [e.id, e]));
+
     const workflows = await prisma.workflow.findMany({
       include: { folder: true },
-      orderBy: { name: "asc" },
+      orderBy: [{ environmentId: "asc" }, { name: "asc" }],
     });
-    const folderPaths = await buildFolderPaths();
-    const wfDir = path.join(dir, "workflows");
 
-    // Wipe and re-write the workflows directory for a clean export
-    fs.rmSync(wfDir, { recursive: true, force: true });
-    mkdirp(wfDir);
+    // Root of the export tree — `zuzuflow/workflows/` at the repo root.
+    const rootDir = path.join(dir, REPO_ROOT, WORKFLOWS_DIR);
 
-    for (const wf of workflows) {
-      const folderPath = wf.folderId ? (folderPaths.get(wf.folderId) ?? "root") : "";
-      const targetDir = folderPath ? path.join(wfDir, folderPath) : wfDir;
-      mkdirp(targetDir);
+    // Wipe and re-write the whole tree for a clean export.
+    fs.rmSync(path.join(dir, REPO_ROOT), { recursive: true, force: true });
+    mkdirp(rootDir);
 
-      const payload = {
-        id: wf.id,
-        key: wf.key,
-        name: wf.name,
-        description: wf.description,
-        status: wf.status,
-        folderId: wf.folderId,
-        folderPath: folderPath || null,
-        template: wf.template,
-        version: wf.version,
-        createdAt: wf.createdAt.toISOString(),
-        updatedAt: wf.updatedAt.toISOString(),
-      };
+    for (const env of environments) {
+      const envSlug = safeName(env.slug);
+      const envDir = path.join(rootDir, envSlug);
+      mkdirp(envDir);
 
-      const fileName = `${safeName(wf.name)}.json`;
-      fs.writeFileSync(path.join(targetDir, fileName), JSON.stringify(payload, null, 2), "utf8");
+      const folderPaths = await buildFolderPaths(env.id);
+      const envWorkflows = workflows.filter((w: any) => w.environmentId === env.id);
+
+      for (const wf of envWorkflows) {
+        const folderPath = wf.folderId ? (folderPaths.get(wf.folderId) ?? "root") : "";
+        const targetDir = folderPath ? path.join(envDir, folderPath) : envDir;
+        mkdirp(targetDir);
+
+        const payload = {
+          id: wf.id,
+          key: wf.key,
+          name: wf.name,
+          description: wf.description,
+          status: wf.status,
+          environmentSlug: env.slug,
+          folderId: wf.folderId,
+          folderPath: folderPath || null,
+          template: wf.template,
+          version: wf.version,
+          createdAt: wf.createdAt.toISOString(),
+          updatedAt: wf.updatedAt.toISOString(),
+        };
+
+        const fileName = `${safeName(wf.name)}.json`;
+        fs.writeFileSync(path.join(targetDir, fileName), JSON.stringify(payload, null, 2), "utf8");
+      }
+
+      // Per-env folder manifest so pull can recreate the tree.
+      const folders = await prisma.folder.findMany({
+        where: { environmentId: env.id },
+        orderBy: { name: "asc" },
+      });
+      fs.writeFileSync(
+        path.join(envDir, "folders.json"),
+        JSON.stringify(
+          folders.map((f: any) => ({ id: f.id, name: f.name, parentId: f.parentId })),
+          null,
+          2,
+        ),
+        "utf8",
+      );
     }
 
-    // Also write a folders manifest so pulls can recreate the tree
-    const folders = await prisma.folder.findMany({ orderBy: { name: "asc" } });
-    fs.writeFileSync(
-      path.join(dir, "folders.json"),
-      JSON.stringify(folders.map((f) => ({ id: f.id, name: f.name, parentId: f.parentId })), null, 2),
-      "utf8"
-    );
+    // Clean up legacy top-level `workflows/` and `folders.json` from older
+    // exports. We'd otherwise ship both old and new layouts together.
+    fs.rmSync(path.join(dir, "workflows"), { recursive: true, force: true });
+    fs.rmSync(path.join(dir, "folders.json"), { force: true });
 
     await git.add(".");
     const status = await git.status();
@@ -351,65 +389,148 @@ export class GitService {
       await localGit.reset(["--hard", `origin/${cfg.branch}`]);
     }
 
-    // Determine default environment for imported data
+    // Default env for LEGACY / fallback imports — used if we find the old
+    // top-level layout, or if a file's env slug doesn't match any known env.
     const defaultEnv = await prisma.environment.findFirst({ where: { isDefault: true } });
-    const envId = defaultEnv?.id ?? "env-default-production";
+    const defaultEnvId = defaultEnv?.id ?? "env-default-production";
 
-    // Restore folder tree from folders.json if present
-    const foldersManifest = path.join(dir, "folders.json");
-    if (fs.existsSync(foldersManifest)) {
-      const rawFolders = JSON.parse(fs.readFileSync(foldersManifest, "utf8")) as Array<{
-        id: string; name: string; parentId: string | null;
-      }>;
+    // Map env-slug → env-id for the new per-env layout.
+    const allEnvs = await prisma.environment.findMany();
+    const envBySlug = new Map(allEnvs.map((e: any) => [e.slug, e.id as string]));
 
-      // Upsert root folders first, then children (topological order)
-      const sorted = this._topoSortFolders(rawFolders);
-      for (const f of sorted) {
-        await prisma.folder.upsert({
-          where: { id: f.id },
-          create: { id: f.id, name: f.name, parentId: f.parentId, environmentId: envId },
-          update: { name: f.name, parentId: f.parentId },
-        });
+    let upserted = 0;
+
+    // ── New layout: zuzuflow/workflows/<env-slug>/... ───────────────────────
+    const newRoot = path.join(dir, REPO_ROOT, WORKFLOWS_DIR);
+    if (fs.existsSync(newRoot)) {
+      const envDirs = fs
+        .readdirSync(newRoot, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name);
+
+      for (const envSlug of envDirs) {
+        const envDir = path.join(newRoot, envSlug);
+        const envId = envBySlug.get(envSlug) ?? defaultEnvId;
+        if (!envBySlug.has(envSlug)) {
+          logger.warn(
+            `Git pull: repo contains env "${envSlug}" that doesn't exist locally — importing into default env instead`,
+          );
+        }
+
+        // Restore folder tree from this env's folders.json
+        const foldersManifest = path.join(envDir, "folders.json");
+        if (fs.existsSync(foldersManifest)) {
+          const rawFolders = JSON.parse(fs.readFileSync(foldersManifest, "utf8")) as Array<{
+            id: string; name: string; parentId: string | null;
+          }>;
+          const sorted = this._topoSortFolders(rawFolders);
+          for (const f of sorted) {
+            await prisma.folder.upsert({
+              where: { id: f.id },
+              create: { id: f.id, name: f.name, parentId: f.parentId, environmentId: envId },
+              update: { name: f.name, parentId: f.parentId, environmentId: envId },
+            });
+          }
+        }
+
+        // Walk workflow JSONs under this env
+        const jsonFiles = this._walkJsonFiles(envDir).filter(
+          (p) => path.basename(p) !== "folders.json",
+        );
+        for (const filePath of jsonFiles) {
+          try {
+            const payload = JSON.parse(fs.readFileSync(filePath, "utf8"));
+            if (!payload.id || !payload.name || !payload.template) continue;
+
+            await prisma.workflow.upsert({
+              where: { id: payload.id },
+              create: {
+                id: payload.id,
+                key: payload.key ?? generateWorkflowKey(),
+                name: payload.name,
+                description: payload.description ?? null,
+                status: payload.status ?? "draft",
+                template: payload.template,
+                version: payload.version ?? 1,
+                folderId: payload.folderId ?? null,
+                environmentId: envId,
+              },
+              update: {
+                ...(payload.key ? { key: payload.key } : {}),
+                name: payload.name,
+                description: payload.description ?? null,
+                status: payload.status ?? "draft",
+                template: payload.template,
+                version: payload.version ?? 1,
+                folderId: payload.folderId ?? null,
+                environmentId: envId,
+              },
+            });
+            upserted++;
+          } catch (e) {
+            logger.warn(`Git pull: failed to import ${filePath}`, { err: e });
+          }
+        }
       }
     }
 
-    // Walk all workflow JSON files and upsert
-    const wfDir = path.join(dir, "workflows");
-    let upserted = 0;
+    // ── Legacy layout fallback: top-level `workflows/` + `folders.json` ─────
+    //    (Repos pushed before the env-scoped layout. Imported into default env.)
+    const legacyWfDir = path.join(dir, "workflows");
+    const legacyFoldersManifest = path.join(dir, "folders.json");
+    const hasLegacy =
+      !fs.existsSync(newRoot) &&
+      (fs.existsSync(legacyWfDir) || fs.existsSync(legacyFoldersManifest));
 
-    if (fs.existsSync(wfDir)) {
-      const jsonFiles = this._walkJsonFiles(wfDir);
-      for (const filePath of jsonFiles) {
-        try {
-          const payload = JSON.parse(fs.readFileSync(filePath, "utf8"));
-          if (!payload.id || !payload.name || !payload.template) continue;
-
-          await prisma.workflow.upsert({
-            where: { id: payload.id },
-            create: {
-              id: payload.id,
-              key: payload.key ?? generateWorkflowKey(),
-              name: payload.name,
-              description: payload.description ?? null,
-              status: payload.status ?? "draft",
-              template: payload.template,
-              version: payload.version ?? 1,
-              folderId: payload.folderId ?? null,
-              environmentId: envId,
-            },
-            update: {
-              ...(payload.key ? { key: payload.key } : {}),
-              name: payload.name,
-              description: payload.description ?? null,
-              status: payload.status ?? "draft",
-              template: payload.template,
-              version: payload.version ?? 1,
-              folderId: payload.folderId ?? null,
-            },
+    if (hasLegacy) {
+      logger.info(
+        "Git pull: detected legacy (non-env-scoped) repo layout, importing into default environment",
+      );
+      if (fs.existsSync(legacyFoldersManifest)) {
+        const rawFolders = JSON.parse(fs.readFileSync(legacyFoldersManifest, "utf8")) as Array<{
+          id: string; name: string; parentId: string | null;
+        }>;
+        const sorted = this._topoSortFolders(rawFolders);
+        for (const f of sorted) {
+          await prisma.folder.upsert({
+            where: { id: f.id },
+            create: { id: f.id, name: f.name, parentId: f.parentId, environmentId: defaultEnvId },
+            update: { name: f.name, parentId: f.parentId },
           });
-          upserted++;
-        } catch (e) {
-          logger.warn(`Git pull: failed to import ${filePath}`, { err: e });
+        }
+      }
+      if (fs.existsSync(legacyWfDir)) {
+        for (const filePath of this._walkJsonFiles(legacyWfDir)) {
+          try {
+            const payload = JSON.parse(fs.readFileSync(filePath, "utf8"));
+            if (!payload.id || !payload.name || !payload.template) continue;
+            await prisma.workflow.upsert({
+              where: { id: payload.id },
+              create: {
+                id: payload.id,
+                key: payload.key ?? generateWorkflowKey(),
+                name: payload.name,
+                description: payload.description ?? null,
+                status: payload.status ?? "draft",
+                template: payload.template,
+                version: payload.version ?? 1,
+                folderId: payload.folderId ?? null,
+                environmentId: defaultEnvId,
+              },
+              update: {
+                ...(payload.key ? { key: payload.key } : {}),
+                name: payload.name,
+                description: payload.description ?? null,
+                status: payload.status ?? "draft",
+                template: payload.template,
+                version: payload.version ?? 1,
+                folderId: payload.folderId ?? null,
+              },
+            });
+            upserted++;
+          } catch (e) {
+            logger.warn(`Git pull: failed to import ${filePath}`, { err: e });
+          }
         }
       }
     }
