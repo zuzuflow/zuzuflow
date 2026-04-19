@@ -291,11 +291,11 @@ export function updateAiSettings(data: {
   });
 }
 
-export type AiBuildMode = "new" | "update" | "new_with_existing";
+export type AiBuildMode = "update" | "new_with_existing";
 
 export function aiGenerateWorkflow(
   prompt: string,
-  mode: AiBuildMode = "new",
+  mode: AiBuildMode = "update",
   existingTemplate?: any,
 ): Promise<{ template: any; explanation: string }> {
   return request<{ template: any; explanation: string }>(

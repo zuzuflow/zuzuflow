@@ -5,10 +5,10 @@ import {
   Loader2,
   Sparkles,
   AlertCircle,
-  Plus,
   RefreshCw,
   Layers,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { aiGenerateWorkflow } from "../../lib/api";
 import type { AiBuildMode } from "../../lib/api";
 import { useWorkflowStore } from "../../store/workflowStore";
@@ -32,12 +32,6 @@ const MODES: {
   description: string;
 }[] = [
   {
-    value: "new",
-    label: "New Workflow",
-    icon: <Plus size={14} />,
-    description: "Start fresh — replaces the canvas",
-  },
-  {
     value: "update",
     label: "Update Existing",
     icon: <RefreshCw size={14} />,
@@ -55,7 +49,8 @@ export function AiBuilderPanel({
   onClose,
 }: AiBuilderPanelProps): React.ReactElement {
   const [prompt, setPrompt] = useState("");
-  const [mode, setMode] = useState<AiBuildMode>("new");
+  const [mode, setMode] = useState<AiBuildMode>("update");
+  const navigate = useNavigate();
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
@@ -82,7 +77,7 @@ export function AiBuilderPanel({
 
     try {
       const existingTemplate =
-        mode !== "new" && hasExistingNodes ? toTemplate() : undefined;
+        hasExistingNodes ? toTemplate() : undefined;
       const res = await aiGenerateWorkflow(
         prompt.trim(),
         mode,
@@ -110,6 +105,10 @@ export function AiBuilderPanel({
         workflowStatus ?? undefined,
         tags,
       );
+    } else if (mode === "new_with_existing") {
+      resetWorkflow();
+      loadTemplate(result.template);
+      navigate("/editor/new");
     } else {
       resetWorkflow();
       loadTemplate(result.template);
@@ -158,7 +157,7 @@ export function AiBuilderPanel({
           </label>
           <div className="space-y-1.5">
             {MODES.map((m) => {
-              const disabled = m.value !== "new" && !hasExistingNodes;
+              const disabled = !hasExistingNodes;
               return (
                 <button
                   key={m.value}
