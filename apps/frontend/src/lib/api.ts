@@ -1190,3 +1190,62 @@ export async function getPublicInvite(token: string): Promise<PublicInvitePrevie
   }
   return res.json() as Promise<PublicInvitePreview>;
 }
+
+// ─── Dashboard stats ──────────────────────────────────────────────────────────
+
+export type DashboardWindow = "1h" | "24h" | "7d" | "30d";
+
+export interface DashboardStats {
+  window: DashboardWindow;
+  windowStart: string;
+  now: string;
+  runs: {
+    total: number;
+    completed: number;
+    failed: number;
+    running: number;
+    cancelled: number;
+    timedOut: number;
+    pending: number;
+  };
+  successRate: number | null;      // 0..1
+  avgDurationMs: number | null;
+  runningNow: number;
+  timeline: Array<{
+    bucket: string;
+    completed: number;
+    failed: number;
+    running: number;
+    cancelled: number;
+  }>;
+  topWorkflows: Array<{
+    workflowId: string;
+    name: string;
+    runs: number;
+    completed: number;
+    failed: number;
+    successRate: number | null;
+    avgDurationMs: number | null;
+  }>;
+  recentFailures: Array<{
+    executionId: string;
+    workflowId: string;
+    workflowName: string;
+    startedAt: string;
+    completedAt: string | null;
+    error: string | null;
+  }>;
+  recentExecutions: Array<{
+    executionId: string;
+    workflowId: string;
+    workflowName: string;
+    status: string;
+    startedAt: string;
+    completedAt: string | null;
+    durationMs: number | null;
+  }>;
+}
+
+export function getDashboardStats(window: DashboardWindow = "24h"): Promise<DashboardStats> {
+  return request<DashboardStats>(`${envPrefix()}/executions/stats?window=${window}`);
+}

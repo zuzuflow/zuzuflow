@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { executionService } from "../services/ExecutionService";
+import { dashboardStatsService, type DashboardWindow } from "../services/DashboardStatsService";
 import { prisma } from "../db/client";
 import { logger } from "../logger";
 
@@ -20,6 +21,38 @@ function errorToStatus(err: unknown): number {
   }
   return 500;
 }
+
+// ---------------------------------------------------------------------------
+// GET /executions/stats — env-scoped aggregate for the Dashboard.
+//
+// Query: ?window=1h|24h|7d|30d   (default: 24h)
+// Returns the whole dashboard payload in one round trip — KPIs, timeline,
+// top workflows, recent failures, recent executions. Safe to poll every 15s.
+// ---------------------------------------------------------------------------
+const VALID_WINDOWS = new Set<DashboardWindow>(["1h", "24h", "7d", "30d"]);
+
+executionRouter.get("/stats", async (req: Request, res: Response) => {
+  try {
+    const environmentId = (req as any).environmentId as string;
+    if (!environmentId) {
+      return res.status(400).json({ error: "Missing environment context" });
+    }
+
+    const rawWindow = (req.query.window as string) || "24h";
+    const window = VALID_WINDOWS.has(rawWindow as DashboardWindow)
+      ? (rawWindow as DashboardWindow)
+      : "24h";
+
+    const stats = await dashboardStatsService.getStats(environmentId, window);
+    // Cache-Control: short-lived — dashboard polls every 15s, caching 10s
+    // protects against hot-reload bursts without making data noticeably stale.
+    res.setHeader("Cache-Control", "private, max-age=10");
+    res.json(stats);
+  } catch (err) {
+    logger.error("GET /executions/stats", { err });
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // POST /executions/start — manually trigger a workflow

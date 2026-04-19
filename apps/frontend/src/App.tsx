@@ -7,6 +7,7 @@ import { WorkflowEditorPage } from "./pages/WorkflowEditorPage";
 import { CredentialsPage } from "./pages/CredentialsPage";
 import { LogsPage } from "./pages/LogsPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
 import { OrgPickerPage } from "./pages/OrgPickerPage";
@@ -52,6 +53,7 @@ export default function App(): React.ReactElement {
           }
         >
           <Route path="/" element={<WorkflowsPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/credentials" element={<CredentialsPage />} />
           <Route path="/logs" element={<LogsPage />} />
           <Route path="/settings" element={<SettingsPage />} />

@@ -11,6 +11,7 @@ import {
   Command,
   ChevronsLeft,
   ChevronsRight,
+  LayoutDashboard,
 } from "lucide-react";
 import { Logo } from "@/components/branding/Logo";
 import { OrgSwitcher } from "@/components/layout/OrgSwitcher";
@@ -22,6 +23,7 @@ import { listEnvironments, listMyOrganizations } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const navItems = [
+  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/", icon: LayoutGrid, label: "Workflows" },
   { to: "/logs", icon: Activity, label: "Logs" },
   { to: "/credentials", icon: KeyRound, label: "Credentials" },
