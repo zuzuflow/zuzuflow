@@ -962,7 +962,11 @@ authRouter.post(
 
       const systemPrompt = buildWorkflowSystemPrompt();
       const buildMode = mode ?? "new";
-      const userPrompt = buildUserPrompt(prompt.trim(), buildMode, existingTemplate);
+      const userPrompt = buildUserPrompt(
+        prompt.trim(),
+        buildMode,
+        existingTemplate,
+      );
       const result = await callLlmForWorkflow(
         settings.aiProvider,
         settings.aiModel ?? "gpt-4o",
@@ -1051,6 +1055,66 @@ IMPORTANT:
 - Every workflow MUST start with exactly one trigger node
 - Use "credentialId": "" for nodes that need credentials (user will configure these after)
 - Use template expressions like {{nodeId.data.field}} for dynamic data between nodes`;
+}
+
+function buildUserPrompt(
+  prompt: string,
+  mode: "new" | "update" | "new_with_existing",
+  existingTemplate?: any,
+): string {
+  if (mode === "new" || !existingTemplate) {
+    return prompt;
+  }
+
+  const existingNodes = (existingTemplate.nodes ?? [])
+    .map(
+      (n: any) =>
+        `  - id: "${n.id}", kind: "${n.kind}", label: "${n.label ?? n.kind}"`,
+    )
+    .join("\n");
+  const existingEdges = (existingTemplate.edges ?? [])
+    .map((e: any) => `  - ${e.source} → ${e.target}`)
+    .join("\n");
+
+  const templateJson = JSON.stringify(existingTemplate, null, 2);
+
+  if (mode === "update") {
+    return `I have an existing workflow that I want to UPDATE/MODIFY. Here is the current workflow:
+
+EXISTING NODES:
+${existingNodes}
+
+EXISTING EDGES:
+${existingEdges}
+
+FULL EXISTING TEMPLATE:
+${templateJson}
+
+USER REQUEST: ${prompt}
+
+IMPORTANT RULES FOR UPDATE MODE:
+- Keep ALL existing nodes and edges unless the user explicitly asks to remove them
+- Preserve existing node IDs — do NOT rename them
+- Add new nodes and edges as requested
+- Connect new nodes to existing ones as appropriate
+- Preserve existing node positions; place new nodes to the right or below existing ones
+- Return the COMPLETE updated template (existing + new nodes/edges)`;
+  }
+
+  // mode === "new_with_existing"
+  return `Create a NEW workflow, but incorporate nodes similar to the ones in my existing workflow. Use them as building blocks or reference for the new workflow.
+
+EXISTING NODES (for reference):
+${existingNodes}
+
+USER REQUEST: ${prompt}
+
+IMPORTANT RULES FOR NEW WITH EXISTING MODE:
+- Create a brand new workflow template with new node IDs
+- Use the existing node kinds as inspiration — reuse similar node types where it makes sense
+- Generate fresh node IDs (do NOT reuse the existing IDs)
+- Build the workflow from scratch based on the user's request, but informed by the existing nodes
+- Start with a trigger node and lay out nodes left-to-right`;
 }
 
 async function callLlmForWorkflow(

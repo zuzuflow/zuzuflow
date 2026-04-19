@@ -1,6 +1,16 @@
 import React, { useState } from "react";
-import { Bot, X, Loader2, Sparkles, AlertCircle } from "lucide-react";
+import {
+  Bot,
+  X,
+  Loader2,
+  Sparkles,
+  AlertCircle,
+  Plus,
+  RefreshCw,
+  Layers,
+} from "lucide-react";
 import { aiGenerateWorkflow } from "../../lib/api";
+import type { AiBuildMode } from "../../lib/api";
 import { useWorkflowStore } from "../../store/workflowStore";
 import type { WorkflowTemplate } from "@workflow/shared";
 
@@ -15,10 +25,37 @@ const EXAMPLE_PROMPTS = [
   "Manual trigger → HTTP request to an API → parse JSON → if status is error send email, else store in Redis",
 ];
 
+const MODES: {
+  value: AiBuildMode;
+  label: string;
+  icon: React.ReactNode;
+  description: string;
+}[] = [
+  {
+    value: "new",
+    label: "New Workflow",
+    icon: <Plus size={14} />,
+    description: "Start fresh — replaces the canvas",
+  },
+  {
+    value: "update",
+    label: "Update Existing",
+    icon: <RefreshCw size={14} />,
+    description: "Add to or modify the current workflow",
+  },
+  {
+    value: "new_with_existing",
+    label: "New + Existing Nodes",
+    icon: <Layers size={14} />,
+    description: "New workflow inspired by current nodes",
+  },
+];
+
 export function AiBuilderPanel({
   onClose,
 }: AiBuilderPanelProps): React.ReactElement {
   const [prompt, setPrompt] = useState("");
+  const [mode, setMode] = useState<AiBuildMode>("new");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
@@ -28,6 +65,10 @@ export function AiBuilderPanel({
 
   const loadTemplate = useWorkflowStore((s) => s.loadTemplate);
   const resetWorkflow = useWorkflowStore((s) => s.resetWorkflow);
+  const toTemplate = useWorkflowStore((s) => s.toTemplate);
+  const nodes = useWorkflowStore((s) => s.nodes);
+
+  const hasExistingNodes = nodes.length > 0;
 
   async function handleGenerate() {
     if (!prompt.trim()) return;
@@ -36,7 +77,13 @@ export function AiBuilderPanel({
     setResult(null);
 
     try {
-      const res = await aiGenerateWorkflow(prompt.trim());
+      const existingTemplate =
+        mode !== "new" && hasExistingNodes ? toTemplate() : undefined;
+      const res = await aiGenerateWorkflow(
+        prompt.trim(),
+        mode,
+        existingTemplate,
+      );
       setResult({
         template: res.template as WorkflowTemplate,
         explanation: res.explanation,
@@ -87,6 +134,43 @@ export function AiBuilderPanel({
             className="w-full h-24 px-3 py-2 text-sm bg-secondary border border-border rounded-md text-foreground placeholder-muted-foreground resize-none focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
             disabled={generating}
           />
+        </div>
+
+        {/* Mode selector */}
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+            Build mode
+          </label>
+          <div className="space-y-1.5">
+            {MODES.map((m) => {
+              const disabled = m.value !== "new" && !hasExistingNodes;
+              return (
+                <button
+                  key={m.value}
+                  onClick={() => !disabled && setMode(m.value)}
+                  disabled={disabled}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md border text-left transition-colors ${
+                    mode === m.value
+                      ? "border-orange-500 bg-orange-500/10 text-foreground"
+                      : disabled
+                        ? "border-border bg-secondary/50 text-muted-foreground/50 cursor-not-allowed"
+                        : "border-border bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span className={mode === m.value ? "text-orange-400" : ""}>
+                    {m.icon}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium">{m.label}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {m.description}
+                      {disabled ? " (no nodes on canvas)" : ""}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Example prompts */}
