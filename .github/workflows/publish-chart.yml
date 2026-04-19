@@ -1,0 +1,96 @@
+# =============================================================================
+# Publish the ZuzuFlow Helm chart to GHCR as an OCI artifact.
+#
+# Triggered by pushing a tag of the form `chart-vX.Y.Z` (e.g. chart-v0.1.0).
+# Consumers install with:
+#   helm install zuzuflow oci://ghcr.io/<owner>/charts/zuzuflow --version X.Y.Z
+#
+# First-publish step — do this once, manually:
+#   After the first successful push, visit
+#     github.com/<owner>/<repo>/packages/container/charts%2Fzuzuflow/settings
+#   and flip "Package visibility" to Public so users can pull anonymously.
+# =============================================================================
+name: Publish chart
+
+on:
+  push:
+    tags: ['chart-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Chart version (override Chart.yaml). Leave blank to use as-is."
+        required: false
+        default: ""
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+
+      - name: Resolve chart version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # Strip the `chart-v` prefix from refs/tags/chart-v0.1.0 → 0.1.0
+            VERSION="${GITHUB_REF_NAME#chart-v}"
+          elif [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION=$(awk '/^version:/ {print $2}' charts/zuzuflow/Chart.yaml)
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Publishing chart version: ${VERSION}"
+
+      - name: Lint chart
+        run: helm lint charts/zuzuflow
+
+      - name: Package chart
+        run: |
+          helm package charts/zuzuflow \
+            --version "${{ steps.version.outputs.version }}" \
+            --destination /tmp/
+
+      - name: Log in to GHCR (Helm registry)
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            helm registry login ${{ env.REGISTRY }} \
+              --username ${{ github.actor }} \
+              --password-stdin
+
+      - name: Push chart to GHCR OCI
+        run: |
+          OWNER_LC="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          helm push "/tmp/zuzuflow-${{ steps.version.outputs.version }}.tgz" \
+            "oci://${{ env.REGISTRY }}/${OWNER_LC}/charts"
+
+      - name: Summary
+        run: |
+          OWNER_LC="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ### Chart published
+
+          **Version:** \`${{ steps.version.outputs.version }}\`
+
+          Install:
+          \`\`\`bash
+          helm install zuzuflow oci://${{ env.REGISTRY }}/${OWNER_LC}/charts/zuzuflow \\
+            --version ${{ steps.version.outputs.version }} \\
+            --create-namespace -n zuzuflow
+          \`\`\`
+
+          **First-publish reminder:** flip the chart package visibility to
+          **Public** at github.com/${{ github.repository }}/packages so consumers
+          can pull without a PAT.
+          EOF

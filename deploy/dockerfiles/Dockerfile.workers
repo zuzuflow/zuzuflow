@@ -13,7 +13,11 @@
 # Stage 0: prebuilt isolated-vm — a scratch image whose only content is the
 # compiled /isolated-vm directory. `COPY --from=ivm` brings it into the main
 # build stage after pnpm install.
-FROM localhost:5000/ivm-prebuilt:node24-ivm6.1.2 AS ivm
+#
+# Override the base image via --build-arg IVM_IMAGE=<ref> so Jenkins can pull
+# from the local registry and GitHub Actions can pull from GHCR.
+ARG IVM_IMAGE=localhost:5000/ivm-prebuilt:node24-ivm6.1.2
+FROM ${IVM_IMAGE} AS ivm
 
 FROM node:24-slim
 

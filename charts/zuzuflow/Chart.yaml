@@ -1,0 +1,22 @@
+apiVersion: v2
+name: zuzuflow
+description: |
+  ZuzuFlow — open-source visual workflow automation platform. Deploys the
+  frontend SPA, Express/Prisma backend, Temporal workers, plus optional
+  embedded Postgres + Temporal for single-command installs.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.24.0"
+home: https://zuzuflow.com
+sources:
+  - https://github.com/zuzuflow/zuzuflow
+keywords:
+  - workflow
+  - automation
+  - temporal
+  - low-code
+maintainers:
+  - name: ZuzuFlow
+    url: https://github.com/zuzuflow
+icon: https://zuzuflow.com/favicon.svg

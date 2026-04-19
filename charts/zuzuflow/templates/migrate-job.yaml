@@ -1,0 +1,73 @@
+{{- if .Values.migrate.enabled }}
+{{/*
+  Prisma migration runner — runs as a Helm pre-install + pre-upgrade hook so
+  Helm waits for schema changes to apply BEFORE rolling the Deployments. If
+  the migration fails, the release fails (no half-applied upgrade).
+
+  The hook is deleted before the next hook creation, so each install/upgrade
+  runs a fresh Job with the matching image version.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "zuzuflow.fullname" . }}-migrate-{{ .Release.Revision }}
+  labels:
+    {{- include "zuzuflow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        {{- include "zuzuflow.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ include "zuzuflow.serviceAccountName" . }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.postgres.enabled }}
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h {{ include "zuzuflow.postgresServiceName" . }} -p 5432 -U $POSTGRES_USER; do
+                echo "Waiting for PostgreSQL..."
+                sleep 2
+              done
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "zuzuflow.secretName" . }}
+                  key: POSTGRES_USER
+      {{- end }}
+      containers:
+        - name: migrate
+          image: {{ include "zuzuflow.image" (dict "name" "backend" "root" .) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - cd /app/apps/backend && pnpm exec prisma migrate deploy --schema=src/db/prisma/schema.prisma
+          envFrom:
+            - secretRef:
+                name: {{ include "zuzuflow.secretName" . }}
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+{{- end }}

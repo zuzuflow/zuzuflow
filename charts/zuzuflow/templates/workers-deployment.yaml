@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "zuzuflow.fullname" . }}-workers
+  labels:
+    {{- include "zuzuflow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: workers
+spec:
+  replicas: {{ .Values.workers.replicas }}
+  selector:
+    matchLabels:
+      {{- include "zuzuflow.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: workers
+  template:
+    metadata:
+      labels:
+        {{- include "zuzuflow.labels" . | nindent 8 }}
+        app.kubernetes.io/component: workers
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "zuzuflow.serviceAccountName" . }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.temporal.enabled }}
+      initContainers:
+        - name: wait-for-temporal
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z {{ include "zuzuflow.temporalServiceName" . }} 7233; do
+                echo "Waiting for Temporal..."
+                sleep 5
+              done
+      {{- end }}
+      containers:
+        - name: workers
+          image: {{ include "zuzuflow.image" (dict "name" "workers" "root" .) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "zuzuflow.configMapName" . }}
+            - secretRef:
+                name: {{ include "zuzuflow.secretName" . }}
+          resources:
+            {{- toYaml .Values.workers.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "zuzuflow.configMapName" . }}
+  labels:
+    {{- include "zuzuflow.labels" . | nindent 4 }}
+data:
+  NODE_ENV: "production"
+  PORT: "3001"
+  APP_URL: {{ .Values.appUrl | quote }}
+  CORS_ORIGINS: {{ default .Values.appUrl .Values.corsOrigins | quote }}
+  TEMPORAL_ADDRESS: {{ include "zuzuflow.temporalAddress" . | quote }}
+  TEMPORAL_NAMESPACE: {{ .Values.temporalNamespace | quote }}
+  TEMPORAL_TASK_QUEUE: {{ .Values.temporalTaskQueue | quote }}
+  SIGNUP_ENABLED: {{ .Values.signupEnabled | quote }}
+  INITIAL_ADMIN_USERNAME: {{ .Values.initialAdmin.username | quote }}
+  MFA_ISSUER: {{ .Values.mfa.issuer | quote }}
+  LOG_LEVEL: "info"
+  {{- if .Values.smtp.enabled }}
+  SMTP_HOST: {{ .Values.smtp.host | quote }}
+  SMTP_PORT: {{ .Values.smtp.port | quote }}
+  SMTP_SECURE: {{ .Values.smtp.secure | quote }}
+  SMTP_USER: {{ .Values.smtp.user | quote }}
+  SMTP_FROM: {{ .Values.smtp.from | quote }}
+  {{- end }}

@@ -1,0 +1,17 @@
+{{- if .Values.temporal.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "zuzuflow.fullname" . }}-temporal-dyn
+  labels:
+    {{- include "zuzuflow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: temporal
+data:
+  development-sql.yaml: |
+    limit.maxIDLength:
+      - value: 255
+        constraints: {}
+    system.forceSearchAttributesCacheRefreshOnRead:
+      - value: true
+        constraints: {}
+{{- end }}

@@ -1,0 +1,197 @@
+# =============================================================================
+# ZuzuFlow Helm values
+#
+# Minimal install:
+#   helm install zuzuflow oci://ghcr.io/zuzuflow/charts/zuzuflow \
+#     --create-namespace -n zuzuflow
+#
+# Production install (with Ingress + TLS via cert-manager):
+#   helm install zuzuflow oci://ghcr.io/zuzuflow/charts/zuzuflow \
+#     --create-namespace -n zuzuflow \
+#     --set appUrl=https://zuzuflow.example.com \
+#     --set ingress.enabled=true \
+#     --set ingress.host=zuzuflow.example.com \
+#     --set ingress.tls.enabled=true \
+#     --set ingress.annotations."cert-manager\.io/cluster-issuer"=letsencrypt-prod
+# =============================================================================
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ─── Image source ────────────────────────────────────────────────────────────
+image:
+  registry: ghcr.io
+  org: zuzuflow          # ghcr.io/${org}/workflow-{backend,frontend,workers}
+  version: latest        # Override with a specific tag for production
+  pullPolicy: IfNotPresent
+  pullSecrets: []        # [{ name: my-pull-secret }] if private images
+
+# ─── Public URL ──────────────────────────────────────────────────────────────
+# Used for CORS + outgoing email links (org invites, MFA OTP, etc.)
+appUrl: "http://localhost"
+
+# Comma-separated origins the backend will allow. Blank → defaults to appUrl.
+corsOrigins: ""
+
+# Allow new users to self-register. Set false to restrict signups to existing
+# admins' invite flow only.
+signupEnabled: true
+
+# ─── Initial superadmin ──────────────────────────────────────────────────────
+# Seeded on first boot when the users table is empty. After that, rotate the
+# password via the Settings → Users UI.
+initialAdmin:
+  username: admin
+  # Blank → auto-generated 16-char password, shown in NOTES.txt after install
+  password: ""
+
+# ─── Secrets ─────────────────────────────────────────────────────────────────
+# Leave blank to auto-generate on first install (preserved across upgrades
+# via a lookup() against the existing Secret). Override any value via
+# --set secrets.jwtSecret=xxx.
+secrets:
+  jwtSecret: ""
+  apiToken: ""
+  encryptionKey: ""        # AES-256-GCM key for settings
+  mfaEncryptionKey: ""     # Must be 64 hex chars — generator produces this
+  webhookSecret: ""
+
+# ─── MFA ─────────────────────────────────────────────────────────────────────
+mfa:
+  issuer: ZuzuFlow
+
+# ─── SMTP (optional — disable to log emails to console only) ─────────────────
+smtp:
+  enabled: false
+  host: ""
+  port: 587
+  secure: false
+  user: ""
+  password: ""
+  from: "noreply@zuzuflow.example.com"
+
+# ─── Embedded Postgres ──────────────────────────────────────────────────────
+# Set enabled: false + populate externalDatabase.url to use a managed Postgres
+# (RDS, Cloud SQL, Neon, etc.)
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  user: zuzuflow
+  database: zuzuflow
+  password: ""             # blank → auto-generated
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""       # blank → cluster default
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1000m"
+      memory: 1Gi
+
+externalDatabase:
+  # Only used when postgres.enabled=false. Full DSN, e.g.:
+  #   postgresql://user:pass@rds.amazonaws.com:5432/zuzuflow
+  url: ""
+
+# ─── Embedded Temporal ──────────────────────────────────────────────────────
+# Uses the auto-setup image — creates the DB schema + default namespace on
+# first boot. For production at scale, set enabled: false and run a dedicated
+# Temporal cluster.
+temporal:
+  enabled: true
+  image: temporalio/auto-setup:1.24.2
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2000m"
+      memory: 2Gi
+
+externalTemporal:
+  address: ""              # host:port — e.g. temporal.prod.internal:7233
+
+temporalNamespace: default
+temporalTaskQueue: workflow-interpreter
+
+# ─── Temporal UI (admin-only — disable in production unless behind auth) ────
+temporalUi:
+  enabled: false
+  image: temporalio/ui:2.28.0
+  service:
+    type: ClusterIP
+    port: 8080
+
+# ─── App services ───────────────────────────────────────────────────────────
+backend:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1000m"
+      memory: 512Mi
+  service:
+    type: ClusterIP
+    port: 3001
+
+frontend:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: "500m"
+      memory: 256Mi
+  service:
+    type: ClusterIP
+    port: 80
+
+workers:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2000m"
+      memory: 2Gi
+
+# ─── Ingress ─────────────────────────────────────────────────────────────────
+# Single-host path-based routing:
+#   /api/*, /internal/*, /health   → backend
+#   /                              → frontend
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}          # e.g. cert-manager.io/cluster-issuer: letsencrypt-prod
+  host: zuzuflow.example.com
+  tls:
+    enabled: false
+    secretName: zuzuflow-tls
+
+# ─── Prisma migrations ──────────────────────────────────────────────────────
+# Runs as a Helm pre-install + pre-upgrade hook Job. Helm waits for success
+# before rolling the Deployments — same guarantee as docker-compose's
+# depends_on condition: service_completed_successfully.
+migrate:
+  enabled: true
+
+# ─── Service account + RBAC ─────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  name: ""                 # blank → uses fullname
+  annotations: {}
+
+# ─── Pod-level settings ──────────────────────────────────────────────────────
+podAnnotations: {}
+podSecurityContext: {}
+securityContext: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -1,0 +1,166 @@
+# =============================================================================
+# Build and publish ZuzuFlow container images to GitHub Container Registry.
+#
+# Images published (under the repo owner's namespace):
+#   ghcr.io/<owner>/workflow-backend
+#   ghcr.io/<owner>/workflow-frontend
+#   ghcr.io/<owner>/workflow-workers
+#   ghcr.io/<owner>/workflow-ivm-prebuilt   (base image for workers)
+#
+# Tagging strategy:
+#   - push to `main`              → :main, :sha-<short>
+#   - tag push `v1.2.3`           → :v1.2.3, :1.2.3, :1.2, :1, :latest
+#   - workflow_dispatch           → :manual-<run>
+#
+# IMPORTANT — first-publish step you do once, manually:
+#   Each of the four packages defaults to "private" when the source repo is
+#   private. After the first successful publish, visit:
+#     github.com/<owner>/<repo>/packages/container/<pkg>/settings
+#   and flip "Package visibility" to Public so users can `docker pull`
+#   anonymously. Source code stays private.
+# =============================================================================
+name: Build and publish images
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IVM_VERSION: "6.1.2"
+  NODE_VERSION: "24"
+
+jobs:
+  # ─── isolated-vm base image ──────────────────────────────────────────────────
+  # Built once; cached by GitHub Actions. Workers depend on it via build-arg.
+  ivm-prebuilt:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_ref: ${{ steps.meta.outputs.image_ref }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image ref
+        id: meta
+        run: |
+          OWNER_LC="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          IMAGE="${{ env.REGISTRY }}/${OWNER_LC}/workflow-ivm-prebuilt:node${{ env.NODE_VERSION }}-ivm${{ env.IVM_VERSION }}"
+          echo "image_ref=${IMAGE}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build + push ivm-prebuilt
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/dockerfiles/Dockerfile.ivm-builder
+          build-args: |
+            IVM_VERSION=${{ env.IVM_VERSION }}
+          tags: ${{ steps.meta.outputs.image_ref }}
+          push: true
+          cache-from: type=gha,scope=ivm-prebuilt
+          cache-to: type=gha,scope=ivm-prebuilt,mode=max
+
+  # ─── App images ──────────────────────────────────────────────────────────────
+  build:
+    needs: ivm-prebuilt
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - name: backend
+            dockerfile: deploy/dockerfiles/Dockerfile.backend
+          - name: frontend
+            dockerfile: deploy/dockerfiles/Dockerfile.frontend
+          - name: workers
+            dockerfile: deploy/dockerfiles/Dockerfile.workers
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image name
+        id: image
+        run: |
+          OWNER_LC="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "name=${{ env.REGISTRY }}/${OWNER_LC}/workflow-${{ matrix.image.name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute tags + labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=short
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build + push ${{ matrix.image.name }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.image.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Pass the resolved IVM image to workers. Harmless for backend/frontend
+          # since they ignore the arg.
+          build-args: |
+            IVM_IMAGE=${{ needs.ivm-prebuilt.outputs.image_ref }}
+          cache-from: type=gha,scope=${{ matrix.image.name }}
+          cache-to: type=gha,scope=${{ matrix.image.name }},mode=max
+
+  # ─── Summary comment on the commit ───────────────────────────────────────────
+  summary:
+    needs: build
+    runs-on: ubuntu-latest
+    if: always() && needs.build.result == 'success'
+    steps:
+      - name: Publish summary
+        run: |
+          OWNER_LC="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ### Images published
+
+          | Image | Ref |
+          |---|---|
+          | backend | \`${{ env.REGISTRY }}/${OWNER_LC}/workflow-backend\` |
+          | frontend | \`${{ env.REGISTRY }}/${OWNER_LC}/workflow-frontend\` |
+          | workers | \`${{ env.REGISTRY }}/${OWNER_LC}/workflow-workers\` |
+
+          Pull with:
+          \`\`\`bash
+          docker pull ${{ env.REGISTRY }}/${OWNER_LC}/workflow-backend:latest
+          \`\`\`
+
+          **Remember**: first time each image is published, flip its visibility
+          to Public at github.com/${{ github.repository }}/packages so anonymous
+          pulls work.
+          EOF

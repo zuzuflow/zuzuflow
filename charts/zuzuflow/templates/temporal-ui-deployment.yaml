@@ -1,0 +1,57 @@
+{{- if .Values.temporalUi.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "zuzuflow.temporalUiServiceName" . }}
+  labels:
+    {{- include "zuzuflow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: temporal-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "zuzuflow.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: temporal-ui
+  template:
+    metadata:
+      labels:
+        {{- include "zuzuflow.labels" . | nindent 8 }}
+        app.kubernetes.io/component: temporal-ui
+    spec:
+      containers:
+        - name: temporal-ui
+          image: {{ .Values.temporalUi.image | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: TEMPORAL_ADDRESS
+              value: {{ include "zuzuflow.temporalAddress" . | quote }}
+            - name: TEMPORAL_CORS_ORIGINS
+              value: {{ .Values.appUrl | quote }}
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "zuzuflow.temporalUiServiceName" . }}
+  labels:
+    {{- include "zuzuflow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: temporal-ui
+spec:
+  type: {{ .Values.temporalUi.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.temporalUi.service.port }}
+      targetPort: http
+  selector:
+    {{- include "zuzuflow.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: temporal-ui
+{{- end }}

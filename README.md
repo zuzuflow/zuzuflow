@@ -36,22 +36,58 @@ Built on React, Temporal, and PostgreSQL. MIT licensed.
 
 ## Get started
 
-### Try it locally (5 minutes)
+### Option 1 — Docker (fastest, single-node self-host) ⚡
 
 ```bash
-git clone <repo-url>
-cd workflow-ui
-pnpm install
-docker compose up -d          # Postgres + Temporal + Redis
-pnpm --filter backend exec npx prisma migrate dev --schema=src/db/prisma/schema.prisma
-pnpm dev                      # backend + workers + frontend
+git clone <repo-url> zuzuflow && cd zuzuflow
+bash install.sh
 ```
+
+Done. `install.sh` generates random secrets, pulls the published images from
+GHCR, brings up Postgres + Temporal + the three app services, runs migrations,
+and prints the URL + initial admin password.
 
 Open **http://localhost:3000** to start building.
 
-### Deploy to production
+Details:
+- **Images:** pre-built at `ghcr.io/zuzuflow/workflow-{backend,frontend,workers}`
+- **Config:** single [`.env.production.example`](./.env.production.example) → copy to `.env`
+- **HTTPS:** bring your own reverse proxy (nginx, Caddy, Cloudflare Tunnel) in front; backend binds to 127.0.0.1:3001, frontend to 0.0.0.0:3000
+- **Upgrade:** `docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d`
+- **External Postgres/Temporal:** set `DATABASE_URL` and `TEMPORAL_ADDRESS` in `.env`, then `docker compose -f docker-compose.prod.yml up -d migrate backend workers frontend` (omits the bundled services)
 
-Kubernetes manifests, Dockerfiles, Jenkins pipeline, and a one-shot server bootstrap script are included under [`deploy/`](./deploy/). See the **Developer Docs** for the full deployment walkthrough.
+### Option 2 — Kubernetes via Helm (production)
+
+```bash
+helm install zuzuflow oci://ghcr.io/zuzuflow/charts/zuzuflow \
+  --version 0.1.0 \
+  --create-namespace -n zuzuflow \
+  --set appUrl=https://zuzuflow.example.com \
+  --set ingress.enabled=true \
+  --set ingress.host=zuzuflow.example.com \
+  --set ingress.tls.enabled=true \
+  --set ingress.annotations."cert-manager\.io/cluster-issuer"=letsencrypt-prod
+```
+
+One command installs Postgres (StatefulSet + PVC), Temporal, Prisma migrations
+(pre-install hook), and the three app services with an Ingress. Every secret
+is auto-generated on first install and preserved across upgrades.
+
+Details + `values.yaml` reference: [`charts/zuzuflow/README.md`](./charts/zuzuflow/README.md).
+
+### Option 3 — Run from source (hacking on the code)
+
+```bash
+git clone <repo-url> zuzuflow && cd zuzuflow
+pnpm install
+cp .env.example .env          # local-dev config — edit as needed
+docker compose up -d          # Postgres + Temporal + Redis
+pnpm --filter backend exec prisma migrate dev --schema=src/db/prisma/schema.prisma
+pnpm dev                      # backend + workers + frontend (hot-reload)
+```
+
+Open **http://localhost:3000**. Use this path if you want to modify ZuzuFlow
+itself.
 
 ---
 

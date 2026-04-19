@@ -1,0 +1,18 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "zuzuflow.postgresServiceName" . }}
+  labels:
+    {{- include "zuzuflow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  type: ClusterIP
+  ports:
+    - name: pg
+      port: 5432
+      targetPort: pg
+  selector:
+    {{- include "zuzuflow.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+{{- end }}

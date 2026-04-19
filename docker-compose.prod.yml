@@ -1,0 +1,184 @@
+# =============================================================================
+# ZuzuFlow — production docker-compose (self-host)
+#
+# Intended for single-node self-hosting with pre-built images from GHCR.
+# Bring your own reverse proxy in front (nginx / Caddy / Traefik / Cloudflare
+# tunnel, etc.) — this compose deliberately does NOT terminate TLS.
+#
+# Quick start:
+#   cp .env.example .env
+#   # edit .env — set ZUZUFLOW_ORG, domain, generate secrets
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Upgrade:
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Pin a version:
+#   ZUZUFLOW_VERSION=v1.2.3 docker compose -f docker-compose.prod.yml up -d
+#
+# Bring-your-own Postgres / Temporal:
+#   Set DATABASE_URL and TEMPORAL_ADDRESS in .env to your external services,
+#   then start only the app services (omit `postgres` and `temporal`):
+#     docker compose -f docker-compose.prod.yml up -d \
+#       migrate backend workers frontend
+#
+# Enable the Temporal UI (localhost-only):
+#     docker compose -f docker-compose.prod.yml --profile ui up -d
+# =============================================================================
+
+name: zuzuflow
+
+x-image: &image-defaults
+  pull_policy: always
+  restart: unless-stopped
+
+services:
+  # ───── Embedded Postgres (omit from `up` cmd to use external) ──────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-zuzuflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-zuzuflow}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-zuzuflow} -d ${POSTGRES_DB:-zuzuflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ───── Embedded Temporal (omit from `up` cmd to use external) ─────────────
+  temporal:
+    image: temporalio/auto-setup:1.24.2
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-zuzuflow}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD}
+      POSTGRES_SEEDS: postgres
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+    volumes:
+      - ./temporal-config:/etc/temporal/config/dynamicconfig:ro
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # ───── Optional: Temporal UI (disable by removing from `up` or via profile) ─
+  temporal-ui:
+    image: temporalio/ui:2.28.0
+    profiles: ["ui"]           # only runs when `--profile ui` is passed
+    restart: unless-stopped
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: "*"
+    ports:
+      - "127.0.0.1:${TEMPORAL_UI_PORT:-8080}:8080"   # bind to localhost only
+
+  # ───── DB migrations (one-shot, runs before backend starts) ─────────────────
+  migrate:
+    <<: *image-defaults
+    image: ghcr.io/${ZUZUFLOW_ORG:-zuzuflow}/workflow-backend:${ZUZUFLOW_VERSION:-latest}
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-zuzuflow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zuzuflow}}
+    command: >-
+      sh -c "cd apps/backend &&
+             pnpm exec prisma migrate deploy --schema=src/db/prisma/schema.prisma"
+
+  # ───── Backend API ──────────────────────────────────────────────────────────
+  backend:
+    <<: *image-defaults
+    image: ghcr.io/${ZUZUFLOW_ORG:-zuzuflow}/workflow-backend:${ZUZUFLOW_VERSION:-latest}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      APP_URL: ${APP_URL}
+      CORS_ORIGINS: ${CORS_ORIGINS:-${APP_URL}}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-zuzuflow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zuzuflow}}
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:-temporal:7233}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-workflow-interpreter}
+      # ── Auth ───────────────────────────────────────────────────────────────
+      JWT_SECRET: ${JWT_SECRET}
+      API_TOKEN: ${API_TOKEN}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY}
+      MFA_ISSUER: ${MFA_ISSUER:-ZuzuFlow}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      SIGNUP_ENABLED: ${SIGNUP_ENABLED:-true}
+      INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-admin}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD}
+      # ── Email (optional — leave blank to disable) ──────────────────────────
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      # Git sync working dir — persisted so pushes don't re-init on every boot
+      - backend_git_data:/app/.git-data
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-3001}:3001"   # localhost only; proxy externally
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ───── Temporal workers ─────────────────────────────────────────────────────
+  workers:
+    <<: *image-defaults
+    image: ghcr.io/${ZUZUFLOW_ORG:-zuzuflow}/workflow-workers:${ZUZUFLOW_VERSION:-latest}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-zuzuflow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zuzuflow}}
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:-temporal:7233}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-workflow-interpreter}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+  # ───── Frontend (static SPA served by nginx) ────────────────────────────────
+  frontend:
+    <<: *image-defaults
+    image: ghcr.io/${ZUZUFLOW_ORG:-zuzuflow}/workflow-frontend:${ZUZUFLOW_VERSION:-latest}
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/nginx-health"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:
+  backend_git_data:

@@ -1,0 +1,51 @@
+───────────────────────────────────────────────────────────────────────
+  ZuzuFlow is installing...
+───────────────────────────────────────────────────────────────────────
+
+Release:   {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+Chart:     {{ .Chart.Name }}-{{ .Chart.Version }}
+
+Watch the rollout:
+  kubectl -n {{ .Release.Namespace }} get pods -w
+
+{{- if .Values.ingress.enabled }}
+
+  URL: {{ if .Values.ingress.tls.enabled }}https{{ else }}http{{ end }}://{{ .Values.ingress.host }}
+{{- else }}
+
+  No Ingress enabled. Port-forward to reach the app locally:
+    kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "zuzuflow.frontendServiceName" . }} 3000:80
+    # then open http://localhost:3000
+
+  To enable a production Ingress:
+    helm upgrade {{ .Release.Name }} --reuse-values \
+      --set ingress.enabled=true \
+      --set ingress.host=your-domain.example.com
+{{- end }}
+
+───────────────────────────────────────────────────────────────────────
+  Initial superadmin credentials
+───────────────────────────────────────────────────────────────────────
+
+Username: {{ .Values.initialAdmin.username }}
+
+{{- $existingSecret := (lookup "v1" "Secret" .Release.Namespace (include "zuzuflow.secretName" .)) | default dict }}
+{{- $existingData := $existingSecret.data | default dict }}
+{{- $adminPw := index $existingData "INITIAL_ADMIN_PASSWORD" }}
+
+Fetch the generated password:
+  kubectl get secret {{ include "zuzuflow.secretName" . }} \
+    -n {{ .Release.Namespace }} \
+    -o jsonpath='{.data.INITIAL_ADMIN_PASSWORD}' | base64 -d && echo
+
+Change it after first login — Settings → Users → Change password.
+
+───────────────────────────────────────────────────────────────────────
+  Upgrade
+───────────────────────────────────────────────────────────────────────
+
+  helm upgrade {{ .Release.Name }} oci://ghcr.io/{{ .Values.image.org }}/charts/zuzuflow \
+    --version <new-version> -n {{ .Release.Namespace }} --reuse-values
+
+Secrets, database contents, and volumes are preserved across upgrades.
