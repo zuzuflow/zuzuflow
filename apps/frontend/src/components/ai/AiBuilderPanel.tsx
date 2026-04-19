@@ -76,8 +76,7 @@ export function AiBuilderPanel({
     setResult(null);
 
     try {
-      const existingTemplate =
-        hasExistingNodes ? toTemplate() : undefined;
+      const existingTemplate = hasExistingNodes ? toTemplate() : undefined;
       const res = await aiGenerateWorkflow(
         prompt.trim(),
         mode,
