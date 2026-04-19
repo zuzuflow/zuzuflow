@@ -291,14 +291,18 @@ export function updateAiSettings(data: {
   });
 }
 
+export type AiBuildMode = "new" | "update" | "new_with_existing";
+
 export function aiGenerateWorkflow(
   prompt: string,
+  mode: AiBuildMode = "new",
+  existingTemplate?: any,
 ): Promise<{ template: any; explanation: string }> {
   return request<{ template: any; explanation: string }>(
     "/auth/organization/ai-generate-workflow",
     {
       method: "POST",
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ prompt, mode, existingTemplate }),
     },
   );
 }

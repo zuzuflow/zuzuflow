@@ -946,7 +946,11 @@ authRouter.post(
           .json({ error: "AI provider and API key must be configured" });
       }
 
-      const { prompt } = req.body as { prompt?: string };
+      const { prompt, mode, existingTemplate } = req.body as {
+        prompt?: string;
+        mode?: "new" | "update" | "new_with_existing";
+        existingTemplate?: any;
+      };
       if (!prompt || !prompt.trim()) {
         return res.status(400).json({ error: "prompt is required" });
       }
@@ -957,12 +961,14 @@ authRouter.post(
       }
 
       const systemPrompt = buildWorkflowSystemPrompt();
+      const buildMode = mode ?? "new";
+      const userPrompt = buildUserPrompt(prompt.trim(), buildMode, existingTemplate);
       const result = await callLlmForWorkflow(
         settings.aiProvider,
         settings.aiModel ?? "gpt-4o",
         apiKey,
         systemPrompt,
-        prompt.trim(),
+        userPrompt,
       );
 
       return res.json(result);
