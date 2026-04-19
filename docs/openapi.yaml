@@ -20,6 +20,8 @@ tags:
     description: Manage encrypted credentials (API keys, connection strings, etc.)
   - name: Webhooks
     description: Register inbound webhook endpoints that trigger workflows
+  - name: CustomNodes
+    description: Author reusable node kinds ("Custom Node Builder") — org-scoped library that travels through git sync
 
 # ─── Reusable schemas ──────────────────────────────────────────────────────────
 
@@ -243,6 +245,168 @@ components:
       properties:
         error:
           type: string
+
+    # ── Custom Node Builder ──────────────────────────────────────────────────
+
+    CustomBuilderHandle:
+      type: object
+      required: [id, label]
+      properties:
+        id:
+          type: string
+          example: "out"
+        label:
+          type: string
+          example: "out"
+
+    CustomBuilderInputField:
+      type: object
+      required: [name, label, type]
+      properties:
+        name:
+          type: string
+          description: Stable key — referenced from user code as `input.fields.<name>`
+        label:
+          type: string
+        type:
+          type: string
+          enum: [string, number, boolean, select, textarea, json, credential]
+        required:
+          type: boolean
+        default: {}
+        description:
+          type: string
+        options:
+          type: array
+          items:
+            type: object
+            required: [value, label]
+            properties:
+              value: { type: string }
+              label: { type: string }
+
+    CustomBuilderHttpTemplate:
+      type: object
+      required: [method, url]
+      properties:
+        method:
+          type: string
+          enum: [GET, POST, PUT, PATCH, DELETE]
+        url:
+          type: string
+          description: Supports `{{fields.X}}` and `{{nodeId.field}}` interpolation
+        headers:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              value: { type: string }
+        queryParams:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              value: { type: string }
+        bodyTemplate:
+          type: string
+
+    CustomNodeTemplateInput:
+      type: object
+      required: [name, handles, inputsSchema, executionMode]
+      description: |
+        Server-side Zod validates `code` is present when `executionMode=sandbox`
+        and `httpTemplate` is present when `executionMode=http`.
+      properties:
+        name:
+          type: string
+          example: "Slugify"
+        description:
+          type: string
+        icon:
+          type: string
+          description: Lucide icon name
+          example: "Link"
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+          example: "#8b5cf6"
+        category:
+          type: string
+          example: "utilities"
+        handles:
+          type: object
+          required: [inputs, outputs]
+          properties:
+            inputs:
+              type: array
+              items:
+                $ref: "#/components/schemas/CustomBuilderHandle"
+            outputs:
+              type: array
+              minItems: 1
+              items:
+                $ref: "#/components/schemas/CustomBuilderHandle"
+        inputsSchema:
+          type: array
+          items:
+            $ref: "#/components/schemas/CustomBuilderInputField"
+        executionMode:
+          type: string
+          enum: [sandbox, http]
+        code:
+          type: string
+          description: |
+            TS source when `executionMode=sandbox`. Must define
+            `async function run(input)` that returns JSON-serialisable data.
+            Access user input as `input.fields.<name>`, upstream outputs via
+            `input.context`. For multi-output routing, return
+            `{ __handle: "<outputId>", value: ... }`.
+        httpTemplate:
+          $ref: "#/components/schemas/CustomBuilderHttpTemplate"
+        credentialType:
+          type: string
+          description: When set, placed nodes render a credential selector
+        isPublic:
+          type: boolean
+          description: Visible to every org on this self-hosted instance when true
+        key:
+          type: string
+          pattern: "^cn_[a-z0-9_-]{4,40}$"
+          description: Auto-generated when omitted (e.g. `cn_a7b3k2m9pq`)
+
+    CustomNodeTemplate:
+      allOf:
+        - $ref: "#/components/schemas/CustomNodeTemplateInput"
+        - type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            organizationId:
+              type: string
+            version:
+              type: integer
+              example: 1
+            gitSyncedAt:
+              type: string
+              format: date-time
+              nullable: true
+              description: Set when the template arrived via git pull; preserved on subsequent pulls
+            originHash:
+              type: string
+              nullable: true
+              description: SHA-256 of the canonical JSON payload as committed to git
+            createdById:
+              type: string
+              nullable: true
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 
@@ -697,6 +861,142 @@ paths:
                   executionId:
                     type: string
                     format: uuid
+
+  # ── Custom Nodes (org-scoped library) ───────────────────────────────────────
+
+  /custom-nodes:
+    get:
+      tags: [CustomNodes]
+      summary: List custom node templates
+      description: |
+        Returns templates visible to the caller's organisation — own
+        templates plus any `isPublic: true` templates from other orgs on this
+        instance. Templates are **organisation-scoped**, not environment-scoped:
+        one library serves dev / staging / prod for the same org.
+      responses:
+        "200":
+          description: "Array wrapped as `{ items: [...] }`"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CustomNodeTemplate"
+
+    post:
+      tags: [CustomNodes]
+      summary: Create a custom node template
+      description: |
+        The payload is validated server-side against the same schema as
+        manual saves. `executionMode` picks between a sandboxed TypeScript
+        body (`code`) or a parameterised HTTP call (`httpTemplate`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomNodeTemplateInput"
+      responses:
+        "201":
+          description: Template created (schedules a git auto-push if configured)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomNodeTemplate"
+        "409":
+          description: Key collision within the org
+        "422":
+          description: Validation error
+
+  /custom-nodes/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [CustomNodes]
+      summary: Get one template
+      responses:
+        "200":
+          description: Template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomNodeTemplate"
+        "404":
+          description: Not found (or belongs to another non-public org)
+
+    patch:
+      tags: [CustomNodes]
+      summary: Update a template (bumps `version`)
+      description: |
+        Existing workflows are unaffected — they run from the snapshot
+        embedded in each placed node. The Properties panel shows an
+        "Upgrade" banner on nodes whose snapshot is older than the template.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomNodeTemplateInput"
+      responses:
+        "200":
+          description: Updated template (schedules a git auto-push if configured)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomNodeTemplate"
+
+    delete:
+      tags: [CustomNodes]
+      summary: Delete a template
+      description: |
+        Workflows that already snapshotted this template keep running. On git
+        pull, other environments will also drop this template (if it arrived
+        via git originally — local-only templates are preserved).
+      responses:
+        "204":
+          description: Deleted
+
+  /custom-nodes/generate:
+    post:
+      tags: [CustomNodes]
+      summary: AI-assisted draft (no persistence)
+      description: |
+        Uses the org's configured LLM (Settings → AI) to produce a draft
+        custom node. The response is validated against the same schema as
+        manual saves — if the LLM returns malformed JSON, the call 422s.
+        The caller reviews in the builder modal and explicitly saves via
+        `POST /custom-nodes`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                prompt:
+                  type: string
+                  example: "a node that takes an email and returns the domain"
+      responses:
+        "200":
+          description: Draft template (review, then POST /custom-nodes to save)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomNodeTemplateInput"
+        "403":
+          description: AI Builder not enabled for this organisation
+        "422":
+          description: LLM output did not parse or failed schema validation
 
 # ─── WebSocket ────────────────────────────────────────────────────────────────
 

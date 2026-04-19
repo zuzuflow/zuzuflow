@@ -1,5 +1,96 @@
 # Building Custom Nodes
 
+ZuzuFlow has two paths for authoring custom nodes:
+
+1. **In-app Custom Node Builder** (recommended for most cases) — open the builder modal from the palette's "Custom Nodes" section. Users fill in name, icon, input fields, output handles, and either paste sandboxed TypeScript or configure an HTTP call. The node appears in the palette and drops into any workflow. No code deploy required.
+
+2. **Built-in node kind** (advanced) — register a first-class `NodeKind` with a dedicated activity, React component, and form. Pick this when your integration needs special dependencies, a custom UI, or performance that the sandbox can't match. The guide below covers this path.
+
+---
+
+## Part 1 — In-app Custom Node Builder
+
+### When to use
+
+Most reusable logic (format strings, enrich payloads, call an external API by template) fits naturally into a Custom Builder node and doesn't need a code deploy. Prefer this path unless you need a unique UI or a native dependency.
+
+### What it produces
+
+A `CustomNodeTemplate` row at the **organization** level (not environment-scoped). Every environment the org has sees the same library.
+
+### Execution modes
+
+- **Sandbox (TypeScript)** — your code runs inside `isolated-vm` with a 128 MB memory cap and 10 s default timeout. No filesystem, no `require`, no network by default. Export an `async function run(input)` that returns JSON-serialisable data. `input.fields` holds the user-filled values, `input.context` holds upstream node outputs.
+- **HTTP request** — parameterised method/URL/headers/query/body with `{{fields.X}}` interpolation. Bind a credential (HTTP basic, bearer token, API key header) via the credential selector on placed nodes — never embed secrets in headers.
+
+### Snapshot-on-drop
+
+When a template is dragged onto the canvas, its code and schemas are **snapshotted** into the placed node's config. Later edits to the template never retroactively change existing workflows. The Properties panel shows an "Upgrade" banner when a newer template version is available; clicking it refreshes that node (and only that node).
+
+### Multi-output routing
+
+Declare more than one output handle in the builder. Return `{ __handle: "<outputId>", value: <data> }` from your code (or via the HTTP response envelope) to route downstream edges along a specific handle. A plain return sends data to the first declared output.
+
+### AI Generate
+
+The builder modal has an **AI Generate** tab. Configure the org's LLM provider at Settings → AI; the endpoint returns a draft (name, icon, inputs, handles, code) that is validated against the same schema as manual saves before it lands in the form. Users review before saving.
+
+### Git sync
+
+Templates travel through git with the rest of your workflow definitions. Layout in the repo:
+
+```
+zuzuflow/
+  workflows/
+    <env-slug>/...
+  custom-nodes/
+    manifest.json              # list of (orgSlug, key, contentHash, version)
+    <org-slug>/
+      <cn_key>.json            # full template payload
+```
+
+Pull ordering: `custom-nodes/` is processed **before** workflows so that pulled workflows find their template library already in place. Locally-authored templates (never pushed) are preserved when a pull removes entries from the manifest.
+
+### Auto-install fallback
+
+If a workflow is imported (via raw JSON, SDK, or git pull) whose `custom_builder` node references a template the target org doesn't have yet, the backend auto-installs the template from the embedded snapshot during workflow save. Workflows always run, even before the full library syncs.
+
+### API
+
+All endpoints are org-scoped and mounted at `/api/custom-nodes`.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/api/custom-nodes` | List templates visible to the caller (own org + public) |
+| `GET` | `/api/custom-nodes/:id` | Fetch one |
+| `POST` | `/api/custom-nodes` | Create |
+| `PATCH` | `/api/custom-nodes/:id` | Update (bumps `version`) |
+| `DELETE` | `/api/custom-nodes/:id` | Delete |
+| `POST` | `/api/custom-nodes/generate` | LLM-generated draft (no persistence; `aiBuilderEnabled` required) |
+
+Create/Update body (validated by Zod server-side):
+
+```json
+{
+  "name": "Slugify",
+  "icon": "Link",
+  "color": "#8b5cf6",
+  "category": "utilities",
+  "handles": { "inputs": [{"id":"in","label":"in"}], "outputs": [{"id":"out","label":"out"}] },
+  "inputsSchema": [{ "name":"text", "label":"Text", "type":"string", "required":true }],
+  "executionMode": "sandbox",
+  "code": "async function run(input) { return { slug: input.fields.text.toLowerCase().replace(/\\s+/g, '-') }; }"
+}
+```
+
+### Security envelope
+
+Custom nodes run in the **same trust envelope** as the built-in `custom_code` node — no filesystem, no unrestricted network, CPU-and-memory-capped isolate. If you need to widen that (e.g. network allowlists), do it as a built-in node kind under Part 2 below.
+
+---
+
+## Part 2 — Adding a built-in node kind (advanced)
+
 This guide explains how to add a new node kind to ZuzuFlow end-to-end: shared types → backend validation → worker activity → frontend node component → properties form.
 
 ---

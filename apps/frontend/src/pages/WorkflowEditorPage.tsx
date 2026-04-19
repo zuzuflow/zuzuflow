@@ -9,6 +9,7 @@ import { ExecutionLog } from "../components/panels/ExecutionLog";
 import { useWorkflowStore } from "../store/workflowStore";
 import { useExecutionStore } from "../store/executionStore";
 import { AiBuilderFab } from "../components/ai/AiBuilderFab";
+import { CustomNodeBuilder } from "../components/custom-nodes/CustomNodeBuilder";
 import * as api from "../lib/api";
 
 export function WorkflowEditorPage(): React.ReactElement {
@@ -26,6 +27,13 @@ export function WorkflowEditorPage(): React.ReactElement {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubworkflow, setIsSubworkflow] = useState(false);
+  const [builderOpen, setBuilderOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setBuilderOpen(true);
+    window.addEventListener("open-custom-node-builder", handler);
+    return () => window.removeEventListener("open-custom-node-builder", handler);
+  }, []);
 
   const isNewSubworkflow = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -157,6 +165,16 @@ export function WorkflowEditorPage(): React.ReactElement {
 
       <ExecutionLog />
       <AiBuilderFab />
+      <CustomNodeBuilder
+        open={builderOpen}
+        onClose={() => setBuilderOpen(false)}
+        onSaved={() => {
+          setBuilderOpen(false);
+          // Palette's useCustomNodeTemplates hook has its own refresh trigger;
+          // emit an event so it re-fetches after save.
+          window.dispatchEvent(new CustomEvent("custom-node-template-saved"));
+        }}
+      />
     </div>
   );
 }

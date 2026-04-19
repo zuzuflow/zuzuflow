@@ -1,4 +1,10 @@
-import type { WorkflowTemplate, ExecutionStatus } from "@workflow/shared";
+import type {
+  WorkflowTemplate,
+  ExecutionStatus,
+  CustomBuilderHandle,
+  CustomBuilderInputField,
+  CustomBuilderHttpTemplate,
+} from "@workflow/shared";
 import { getApiConfig } from "../store/apiConfigStore";
 import { getEnvironmentState } from "../store/environmentStore";
 import type { EnvironmentItem } from "../store/environmentStore";
@@ -1308,4 +1314,96 @@ export function getDashboardStats(
   return request<DashboardStats>(
     `${envPrefix()}/executions/stats?window=${window}`,
   );
+}
+
+// ─── Custom Node Templates (org-scoped) ───────────────────────────────────────
+
+export interface CustomNodeTemplateRecord {
+  id: string;
+  organizationId: string;
+  key: string;
+  name: string;
+  description: string | null;
+  icon: string;
+  color: string;
+  category: string;
+  handles: {
+    inputs: CustomBuilderHandle[];
+    outputs: CustomBuilderHandle[];
+  };
+  inputsSchema: CustomBuilderInputField[];
+  executionMode: "sandbox" | "http";
+  code: string | null;
+  httpTemplate: CustomBuilderHttpTemplate | null;
+  credentialType: string | null;
+  isPublic: boolean;
+  gitSyncedAt: string | null;
+  originHash: string | null;
+  version: number;
+  createdById: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomNodeTemplateInputPayload {
+  name: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+  category?: string;
+  handles: {
+    inputs: CustomBuilderHandle[];
+    outputs: CustomBuilderHandle[];
+  };
+  inputsSchema: CustomBuilderInputField[];
+  executionMode: "sandbox" | "http";
+  code?: string;
+  httpTemplate?: CustomBuilderHttpTemplate;
+  credentialType?: string;
+  isPublic?: boolean;
+  key?: string;
+}
+
+export function listCustomNodeTemplates(): Promise<{
+  items: CustomNodeTemplateRecord[];
+}> {
+  return request<{ items: CustomNodeTemplateRecord[] }>(`/custom-nodes`);
+}
+
+export function getCustomNodeTemplate(
+  id: string,
+): Promise<CustomNodeTemplateRecord> {
+  return request<CustomNodeTemplateRecord>(`/custom-nodes/${id}`);
+}
+
+export function createCustomNodeTemplate(
+  input: CustomNodeTemplateInputPayload,
+): Promise<CustomNodeTemplateRecord> {
+  return request<CustomNodeTemplateRecord>(`/custom-nodes`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateCustomNodeTemplate(
+  id: string,
+  patch: Partial<CustomNodeTemplateInputPayload>,
+): Promise<CustomNodeTemplateRecord> {
+  return request<CustomNodeTemplateRecord>(`/custom-nodes/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteCustomNodeTemplate(id: string): Promise<void> {
+  return request<void>(`/custom-nodes/${id}`, { method: "DELETE" });
+}
+
+export function generateCustomNodeTemplate(
+  prompt: string,
+): Promise<CustomNodeTemplateInputPayload> {
+  return request<CustomNodeTemplateInputPayload>(`/custom-nodes/generate`, {
+    method: "POST",
+    body: JSON.stringify({ prompt }),
+  });
 }

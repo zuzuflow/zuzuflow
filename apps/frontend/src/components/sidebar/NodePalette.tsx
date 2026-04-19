@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import * as LucideIcons from "lucide-react";
 import type { LucideProps } from "lucide-react";
-import { Search, ChevronDown, ChevronRight, GitFork, RefreshCw } from "lucide-react";
+import { Search, ChevronDown, ChevronRight, GitFork, RefreshCw, Puzzle, Plus } from "lucide-react";
 import type { NodeKind } from "@workflow/shared";
 import {
   nodeRegistry,
@@ -9,7 +9,8 @@ import {
   getNodesByCategory,
 } from "../../lib/nodeRegistry";
 import { listSubworkflows } from "../../lib/api";
-import type { WorkflowListItem } from "../../lib/api";
+import type { WorkflowListItem, CustomNodeTemplateRecord } from "../../lib/api";
+import { useCustomNodeTemplates } from "../../hooks/useCustomNodeTemplates";
 import { Input } from "../../components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -159,6 +160,47 @@ function SubworkflowPaletteItem({ wf }: { wf: WorkflowListItem }): React.ReactEl
   );
 }
 
+// ─── Custom node palette item ─────────────────────────────────────────────────
+
+function CustomNodePaletteItem({
+  template,
+}: {
+  template: CustomNodeTemplateRecord;
+}): React.ReactElement {
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+    // Distinct MIME so WorkflowCanvas knows to snapshot the template into a
+    // CustomBuilderConfig rather than fall through the default node-kind path.
+    e.dataTransfer.setData("application/custom-node-template", template.id);
+    e.dataTransfer.setData("application/node-kind", "custom_builder");
+    e.dataTransfer.effectAllowed = "copy";
+  };
+
+  return (
+    <motion.div
+      whileHover={{ x: 2 }}
+      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      draggable
+      onDragStart={handleDragStart as unknown as (event: MouseEvent | PointerEvent | TouchEvent) => void}
+      className="flex items-start gap-2.5 px-3 py-2 rounded-md cursor-grab active:cursor-grabbing transition-colors hover:bg-accent border-l-2"
+      style={{ borderLeftColor: template.color }}
+      title={template.description ?? template.name}
+    >
+      <div
+        className="flex items-center justify-center w-7 h-7 rounded-md shrink-0 text-white"
+        style={{ backgroundColor: template.color }}
+      >
+        <DynamicIcon name={template.icon} size={13} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-medium text-foreground leading-tight truncate">{template.name}</div>
+        <div className="text-[10px] text-muted-foreground leading-tight mt-0.5 truncate">
+          {template.executionMode === "http" ? "HTTP" : "JS"} · {template.key}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 // ─── Main palette ─────────────────────────────────────────────────────────────
 
 export function NodePalette({ isSubworkflow = false }: { isSubworkflow?: boolean }): React.ReactElement {
@@ -167,6 +209,12 @@ export function NodePalette({ isSubworkflow = false }: { isSubworkflow?: boolean
   const [subworkflows, setSubworkflows] = useState<WorkflowListItem[]>([]);
   const [subwfCollapsed, setSubwfCollapsed] = useState(false);
   const [subwfLoading, setSubwfLoading] = useState(true);
+  const [customCollapsed, setCustomCollapsed] = useState(false);
+  const {
+    templates: customTemplates,
+    loading: customLoading,
+    refresh: refreshCustom,
+  } = useCustomNodeTemplates();
 
   const fetchSubworkflows = () => {
     setSubwfLoading(true);
@@ -327,6 +375,73 @@ export function NodePalette({ isSubworkflow = false }: { isSubworkflow?: boolean
                       ) : (
                         subworkflows.map((wf) => (
                           <SubworkflowPaletteItem key={wf.id} wf={wf} />
+                        ))
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Custom Nodes section — org-scoped reusable node kinds */}
+            <div className="mb-1">
+              <div className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-secondary/40 transition-colors">
+                <button
+                  onClick={() => setCustomCollapsed((v) => !v)}
+                  className="flex items-center gap-2 flex-1 text-left"
+                >
+                  <span style={{ color: "#8b5cf6" }} className="shrink-0">
+                    {customCollapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest flex-1 flex items-center gap-1" style={{ color: "#8b5cf6" }}>
+                    <Puzzle size={10} />
+                    Custom Nodes
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    // Builder modal lands in Slice 2 — placeholder.
+                    window.dispatchEvent(new CustomEvent("open-custom-node-builder"));
+                  }}
+                  className="p-0.5 rounded hover:bg-muted transition-colors shrink-0"
+                  title="Create new custom node"
+                >
+                  <Plus size={10} style={{ color: "#8b5cf6" }} />
+                </button>
+                <button
+                  onClick={() => refreshCustom()}
+                  className="p-0.5 rounded hover:bg-muted transition-colors shrink-0"
+                  title="Refresh"
+                >
+                  <RefreshCw size={9} style={{ color: "#8b5cf6" }} />
+                </button>
+                <span
+                  className="text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0"
+                  style={{ backgroundColor: "#8b5cf620", color: "#8b5cf6" }}
+                >
+                  {customTemplates.length}
+                </span>
+              </div>
+
+              <AnimatePresence initial={false}>
+                {!customCollapsed && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="space-y-0.5 px-2 pb-1">
+                      {customLoading ? (
+                        <div className="px-3 py-2 text-[10px] text-muted-foreground">Loading…</div>
+                      ) : customTemplates.length === 0 ? (
+                        <div className="px-3 py-2 text-[10px] text-muted-foreground leading-relaxed">
+                          No custom nodes yet. Click <Plus size={9} className="inline -mt-0.5" /> to build one.
+                        </div>
+                      ) : (
+                        customTemplates.map((t) => (
+                          <CustomNodePaletteItem key={t.id} template={t} />
                         ))
                       )}
                     </div>

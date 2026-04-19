@@ -15,7 +15,7 @@ Built on React, Temporal, and PostgreSQL. MIT licensed.
 - **Self-hostable.** Docker Compose for local, Kubernetes manifests for production. No cloud lock-in, no per-execution metering.
 - **Developer-first.** TypeScript SDK, REST API, webhooks, and an External Trigger node for calling workflows from your own code.
 - **Observable.** Every execution is inspectable in the Temporal UI — per-node logs, timings, retries, payloads.
-- **Extensible.** 50+ built-in nodes (HTTP, databases, AWS, Slack, email, AI, …) plus a clear path to build your own.
+- **Extensible.** 50+ built-in nodes (HTTP, databases, AWS, Slack, email, AI, …) plus an in-app **Custom Node Builder** — author reusable node kinds from the UI (sandboxed TypeScript or parameterised HTTP), with AI-assisted drafting and cross-environment git sync. See [docs/CUSTOM_NODES.md](./docs/CUSTOM_NODES.md).
 
 ---
 

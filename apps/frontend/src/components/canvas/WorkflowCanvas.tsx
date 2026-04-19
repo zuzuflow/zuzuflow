@@ -37,6 +37,7 @@ import { HttpRequestNode } from "../nodes/HttpRequestNode";
 import { SendEmailNode } from "../nodes/SendEmailNode";
 import { PostgresNode } from "../nodes/PostgresNode";
 import { CustomCodeNode } from "../nodes/CustomCodeNode";
+import { CustomBuilderNode } from "../nodes/CustomBuilderNode";
 import { DebugNode } from "../nodes/DebugNode";
 import { RabbitMQNode } from "../nodes/RabbitMQNode";
 import { WorkflowTriggerInNode } from "../nodes/WorkflowTriggerInNode";
@@ -80,7 +81,12 @@ import { AwsSecretsManagerNode } from "../nodes/AwsSecretsManagerNode";
 import { AwsSsmNode } from "../nodes/AwsSsmNode";
 import { AwsEventBridgeNode } from "../nodes/AwsEventBridgeNode";
 import { AwsStepFunctionsNode } from "../nodes/AwsStepFunctionsNode";
-import type { SubworkflowCallConfig } from "@workflow/shared";
+import type {
+  SubworkflowCallConfig,
+  CustomBuilderConfig,
+  CustomBuilderInputField,
+} from "@workflow/shared";
+import { getCustomNodeTemplate } from "../../lib/api";
 
 // Node components use NodeProps<WorkflowNode> but xyflow v12 expects NodeProps<Record<string, unknown>>.
 // At runtime the data is identical; this cast bridges the generic type gap.
@@ -119,6 +125,7 @@ const nodeTypes = {
   twilio_sms: TwilioSmsNode,
   twilio_email: TwilioEmailNode,
   custom_code: CustomCodeNode,
+  custom_builder: CustomBuilderNode,
   debug: DebugNode,
   llm_prompt: LlmPromptNode,
   ai_agent: AiAgentNode,
@@ -220,6 +227,47 @@ function Canvas(): React.ReactElement {
         x: e.clientX,
         y: e.clientY,
       });
+
+      // Custom node template drop — snapshot the full template into the node's
+      // config so the workflow is self-contained (survives template edit/delete
+      // and cross-environment / cross-org import).
+      const customTemplateId = e.dataTransfer.getData(
+        "application/custom-node-template",
+      );
+      if (kind === "custom_builder" && customTemplateId) {
+        void getCustomNodeTemplate(customTemplateId)
+          .then((tpl) => {
+            const defaults: Record<string, unknown> = {};
+            for (const field of tpl.inputsSchema as CustomBuilderInputField[]) {
+              if (field.default !== undefined) {
+                defaults[field.name] = field.default;
+              }
+            }
+            const snapshot: CustomBuilderConfig = {
+              templateId: tpl.id,
+              templateKey: tpl.key,
+              templateVersion: tpl.version,
+              name: tpl.name,
+              icon: tpl.icon,
+              color: tpl.color,
+              category: tpl.category,
+              inputs: tpl.handles.inputs,
+              outputs: tpl.handles.outputs,
+              inputsSchema: tpl.inputsSchema,
+              executionMode: tpl.executionMode,
+              code: tpl.code ?? undefined,
+              httpTemplate: tpl.httpTemplate ?? undefined,
+              credentialType: tpl.credentialType ?? undefined,
+              templateInputs: defaults,
+              credentialRef: null,
+            };
+            addNode(kind, position, snapshot as Partial<CustomBuilderConfig>);
+          })
+          .catch((err) => {
+            console.error("Failed to snapshot custom node template", err);
+          });
+        return;
+      }
 
       const subworkflowId = e.dataTransfer.getData(
         "application/subworkflow-id",

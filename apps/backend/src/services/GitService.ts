@@ -1,10 +1,34 @@
 import fs from "fs";
 import path from "path";
+import { createHash } from "crypto";
 import { simpleGit } from "simple-git";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../db/client";
 import { logger } from "../logger";
 import { settingService } from "./SettingService";
 import { generateWorkflowKey } from "./WorkflowService";
+
+function canonicalStringify(v: unknown): string {
+  if (v === null || typeof v !== "object") return JSON.stringify(v);
+  if (Array.isArray(v)) return "[" + v.map(canonicalStringify).join(",") + "]";
+  const keys = Object.keys(v as Record<string, unknown>).sort();
+  return (
+    "{" +
+    keys
+      .map(
+        (k) =>
+          JSON.stringify(k) +
+          ":" +
+          canonicalStringify((v as Record<string, unknown>)[k]),
+      )
+      .join(",") +
+    "}"
+  );
+}
+
+function sha256Hex(s: string): string {
+  return createHash("sha256").update(s).digest("hex");
+}
 
 // =============================================================================
 // GitService — push/pull workflow definitions to/from a remote git repository
@@ -24,6 +48,7 @@ import { generateWorkflowKey } from "./WorkflowService";
 
 const REPO_ROOT = "zuzuflow";
 const WORKFLOWS_DIR = "workflows";
+const CUSTOM_NODES_DIR = "custom-nodes";
 
 export type GitProvider = "github" | "bitbucket" | "gitlab" | "custom";
 
@@ -315,6 +340,57 @@ export class GitService {
       );
     }
 
+    // Custom node templates — org-scoped library, written to a single flat
+    // tree at zuzuflow/custom-nodes/<org-slug>/<key>.json. A top-level
+    // manifest.json enumerates (orgSlug, key, contentHash) so the pull side
+    // can detect additions, updates, and deletions without scanning every
+    // file.
+    const cnRoot = path.join(dir, REPO_ROOT, CUSTOM_NODES_DIR);
+    mkdirp(cnRoot);
+    const allOrgs = await prisma.organization.findMany({ orderBy: { slug: "asc" } });
+    const manifest: Array<{ orgSlug: string; key: string; hash: string; version: number }> = [];
+    for (const org of allOrgs) {
+      const templates = await prisma.customNodeTemplate.findMany({
+        where: { organizationId: org.id },
+        orderBy: { key: "asc" },
+      });
+      if (templates.length === 0) continue;
+      const orgDir = path.join(cnRoot, safeName(org.slug));
+      mkdirp(orgDir);
+      for (const t of templates) {
+        const payload = {
+          key: t.key,
+          organizationSlug: org.slug,
+          name: t.name,
+          description: t.description,
+          icon: t.icon,
+          color: t.color,
+          category: t.category,
+          handles: t.handles,
+          inputsSchema: t.inputsSchema,
+          executionMode: t.executionMode,
+          code: t.code,
+          httpTemplate: t.httpTemplate,
+          credentialType: t.credentialType,
+          isPublic: t.isPublic,
+          version: t.version,
+        };
+        const canonical = canonicalStringify(payload);
+        const hash = sha256Hex(canonical);
+        fs.writeFileSync(
+          path.join(orgDir, `${safeName(t.key)}.json`),
+          JSON.stringify(payload, null, 2),
+          "utf8",
+        );
+        manifest.push({ orgSlug: org.slug, key: t.key, hash, version: t.version });
+      }
+    }
+    fs.writeFileSync(
+      path.join(cnRoot, "manifest.json"),
+      JSON.stringify(manifest, null, 2),
+      "utf8",
+    );
+
     // Clean up legacy top-level `workflows/` and `folders.json` from older
     // exports. We'd otherwise ship both old and new layouts together.
     fs.rmSync(path.join(dir, "workflows"), { recursive: true, force: true });
@@ -397,6 +473,147 @@ export class GitService {
     // Map env-slug → env-id for the new per-env layout.
     const allEnvs = await prisma.environment.findMany();
     const envBySlug = new Map(allEnvs.map((e: any) => [e.slug, e.id as string]));
+
+    // Custom node templates MUST be imported before workflows — pulled
+    // workflows may reference templates by key, and WorkflowService's
+    // auto-install is only a fallback. Having the library in place first
+    // means the workflows pick up the real (possibly newer) templates.
+    const cnRoot = path.join(dir, REPO_ROOT, CUSTOM_NODES_DIR);
+    const cnManifestPath = path.join(cnRoot, "manifest.json");
+    if (fs.existsSync(cnManifestPath)) {
+      try {
+        const manifest = JSON.parse(
+          fs.readFileSync(cnManifestPath, "utf8"),
+        ) as Array<{
+          orgSlug: string;
+          key: string;
+          hash: string;
+          version?: number;
+        }>;
+        const allOrgs = await prisma.organization.findMany();
+        const orgBySlug = new Map(allOrgs.map((o: any) => [o.slug, o.id as string]));
+        const defaultOrg = await prisma.organization.findFirst({
+          orderBy: { createdAt: "asc" },
+        });
+
+        // Track which (orgId, key) pairs we saw so we can delete anything
+        // that's gone from the manifest — but only for templates that came
+        // from git originally (gitSyncedAt set). Locally-authored templates
+        // in the target org are left untouched.
+        const seenByOrg = new Map<string, Set<string>>();
+        let installed = 0;
+
+        for (const entry of manifest) {
+          const orgId = orgBySlug.get(entry.orgSlug) ?? defaultOrg?.id;
+          if (!orgId) continue;
+          const filePath = path.join(
+            cnRoot,
+            entry.orgSlug,
+            `${entry.key}.json`,
+          );
+          if (!fs.existsSync(filePath)) {
+            logger.warn("Git pull: manifest references missing template file", {
+              orgSlug: entry.orgSlug,
+              key: entry.key,
+            });
+            continue;
+          }
+          try {
+            const payload = JSON.parse(fs.readFileSync(filePath, "utf8")) as {
+              key: string;
+              name: string;
+              description?: string | null;
+              icon?: string;
+              color?: string;
+              category?: string;
+              handles: unknown;
+              inputsSchema: unknown;
+              executionMode: string;
+              code?: string | null;
+              httpTemplate?: unknown;
+              credentialType?: string | null;
+              isPublic?: boolean;
+              version?: number;
+            };
+
+            await prisma.customNodeTemplate.upsert({
+              where: {
+                organizationId_key: { organizationId: orgId, key: entry.key },
+              },
+              create: {
+                organizationId: orgId,
+                key: entry.key,
+                name: payload.name,
+                description: payload.description ?? null,
+                icon: payload.icon ?? "Puzzle",
+                color: payload.color ?? "#8b5cf6",
+                category: payload.category ?? "utilities",
+                handles: payload.handles as Prisma.InputJsonValue,
+                inputsSchema: payload.inputsSchema as Prisma.InputJsonValue,
+                executionMode: payload.executionMode,
+                code: payload.code ?? null,
+                httpTemplate: payload.httpTemplate
+                  ? (payload.httpTemplate as Prisma.InputJsonValue)
+                  : undefined,
+                credentialType: payload.credentialType ?? null,
+                isPublic: payload.isPublic ?? false,
+                version: payload.version ?? 1,
+                gitSyncedAt: new Date(),
+                originHash: entry.hash,
+              },
+              update: {
+                name: payload.name,
+                description: payload.description ?? null,
+                icon: payload.icon ?? "Puzzle",
+                color: payload.color ?? "#8b5cf6",
+                category: payload.category ?? "utilities",
+                handles: payload.handles as Prisma.InputJsonValue,
+                inputsSchema: payload.inputsSchema as Prisma.InputJsonValue,
+                executionMode: payload.executionMode,
+                code: payload.code ?? null,
+                httpTemplate: payload.httpTemplate
+                  ? (payload.httpTemplate as Prisma.InputJsonValue)
+                  : undefined,
+                credentialType: payload.credentialType ?? null,
+                isPublic: payload.isPublic ?? false,
+                version: payload.version ?? 1,
+                gitSyncedAt: new Date(),
+                originHash: entry.hash,
+              },
+            });
+            if (!seenByOrg.has(orgId)) seenByOrg.set(orgId, new Set());
+            seenByOrg.get(orgId)!.add(entry.key);
+            installed++;
+          } catch (e) {
+            logger.warn("Git pull: failed to import custom node template", {
+              path: filePath,
+              err: e,
+            });
+          }
+        }
+
+        // Delete templates that previously came from git but are no longer
+        // in the manifest. Locally-authored templates (gitSyncedAt === null)
+        // are never touched here.
+        for (const [orgId, keys] of seenByOrg) {
+          await prisma.customNodeTemplate.deleteMany({
+            where: {
+              organizationId: orgId,
+              gitSyncedAt: { not: null },
+              key: { notIn: Array.from(keys) },
+            },
+          });
+        }
+
+        logger.info(
+          `Git pull: upserted ${installed} custom node template(s) from manifest`,
+        );
+      } catch (e) {
+        logger.warn("Git pull: failed to process custom-nodes manifest", {
+          err: e,
+        });
+      }
+    }
 
     let upserted = 0;
 

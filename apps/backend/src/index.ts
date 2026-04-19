@@ -17,6 +17,7 @@ import { settingsRouter } from "./routes/settings";
 import { gitRouter } from "./routes/git";
 import { authRouter } from "./routes/auth";
 import { environmentRouter } from "./routes/environments";
+import { customNodeRouter } from "./routes/customNodes";
 import { requireAuth } from "./middleware/auth";
 import { requireMfaEnrollmentComplete } from "./middleware/requireMfaEnrollmentComplete";
 import { resolveEnvironment } from "./middleware/resolveEnvironment";
@@ -93,6 +94,7 @@ app.use("/api", requireMfaEnrollmentComplete);
 app.use("/api/environments", environmentRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/git", gitRouter);
+app.use("/api/custom-nodes", customNodeRouter);
 
 // Environment-scoped routes — require :envSlug in the URL
 app.use("/api/env/:envSlug", resolveEnvironment);

@@ -45,6 +45,7 @@ import type {
   SendEmailConfig,
   PostgresConfig,
   CustomCodeConfig,
+  CustomBuilderConfig,
   MqttConfig,
   RabbitMQConfig,
   WorkflowTriggerOutConfig,
@@ -784,6 +785,118 @@ export async function graphInterpreterWorkflow(
               context: nodeOutputs,
             });
             outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Custom Builder — user-authored reusable node kind. The node's
+          // config carries a snapshot of the template (code + handles +
+          // schemas) so execution is fully self-contained, independent of
+          // what the org's current template library looks like.
+          // ------------------------------------------------------------------
+          case "custom_builder": {
+            const cfg = node.config as CustomBuilderConfig;
+
+            // Resolve {{nodeId.field}} tokens in any string-valued templateInputs.
+            const resolvedFields: Record<string, unknown> = {};
+            for (const [k, v] of Object.entries(cfg.templateInputs ?? {})) {
+              resolvedFields[k] =
+                typeof v === "string" ? interpolate(v, nodeOutputs) : v;
+            }
+
+            let raw: unknown;
+            if (cfg.executionMode === "sandbox") {
+              // The sandbox auto-runner invokes `run(global.input)` and sends
+              // its return value back via `setResult`. We pass templateInputs
+              // under `fields` and upstream node outputs under `context`.
+              const sandboxOut = (await runCustomCodeActivity({
+                config: {
+                  code: cfg.code ?? "",
+                  timeoutMs: cfg.timeoutMs,
+                  memoryMb: cfg.memoryMb,
+                },
+                context: {
+                  fields: resolvedFields,
+                  context: nodeOutputs,
+                },
+              })) as { result: unknown; logs: string[] };
+              // Unwrap to the user's `run()` return so downstream nodes can
+              // access fields directly as `{{nodeId.slug}}` etc.
+              raw = sandboxOut?.result;
+            } else {
+              // HTTP mode: render cfg.httpTemplate into an HttpRequestConfig
+              // and call the existing httpRequestActivity. `fields` are merged
+              // into the interpolation context so users can write
+              // {{fields.url}} / {{fields.channel}} in URL, headers, and body.
+              const tpl = cfg.httpTemplate;
+              if (!tpl) {
+                throw new Error(
+                  "Custom node is in http mode but httpTemplate is missing",
+                );
+              }
+
+              let headers = [...(tpl.headers ?? [])];
+              if (cfg.credentialRef?.credentialId) {
+                const cred = await resolveCredentialActivity(
+                  cfg.credentialRef.credentialId,
+                );
+                const authHeader = cred.token
+                  ? { key: "Authorization", value: `Bearer ${cred.token}` }
+                  : cred.username && cred.password
+                    ? {
+                        key: "Authorization",
+                        value: `Basic ${Buffer.from(
+                          `${cred.username}:${cred.password}`,
+                        ).toString("base64")}`,
+                      }
+                    : cred.headerValue
+                      ? {
+                          key: cred.headerName ?? "X-Api-Key",
+                          value: cred.headerValue,
+                        }
+                      : null;
+                if (authHeader) headers.push(authHeader);
+              }
+
+              const httpCfg: HttpRequestConfig = {
+                method: (tpl.method as HttpRequestConfig["method"]) ?? "GET",
+                url: tpl.url,
+                headers,
+                queryParams: tpl.queryParams ?? [],
+                body: tpl.bodyTemplate,
+                failOnError: true,
+                timeoutMs: cfg.timeoutMs ?? 30_000,
+              };
+
+              // Merge resolved templateInputs into the interpolation context
+              // under the `fields` key so {{fields.X}} works.
+              raw = await httpRequestActivity({
+                config: httpCfg,
+                context: { ...nodeOutputs, fields: resolvedFields },
+              });
+            }
+
+            // Envelope routing (shared across modes): a return value shaped
+            // { __handle: "<outputId>", value: ... } picks a specific output
+            // handle; otherwise route to the first declared output.
+            const envelope = raw as {
+              __handle?: string;
+              value?: unknown;
+            } | null;
+            const defaultHandle = cfg.outputs[0]?.id ?? "";
+            if (
+              envelope &&
+              typeof envelope === "object" &&
+              "__handle" in envelope &&
+              cfg.outputs.length > 1 &&
+              cfg.outputs.some((h) => h.id === envelope.__handle)
+            ) {
+              nodeOutput = envelope.value;
+              outgoingHandles = [envelope.__handle as string];
+            } else {
+              nodeOutput = raw;
+              outgoingHandles = [defaultHandle];
+            }
             break;
           }
 

@@ -66,6 +66,7 @@ model Organization {
   orgPlan      OrgPlan?
   invites      OrgInvite[]
   aiSettings   OrgAiSettings?
+  customNodeTemplates CustomNodeTemplate[]
 
   @@map("organizations")
 }
@@ -665,4 +666,63 @@ model UsageSnapshot {
   @@unique([organizationId, date])
   @@index([date])
   @@map("usage_snapshots")
+}
+
+// -----------------------------------------------------------------------------
+// CustomNodeTemplate — user-authored reusable node kind (org-scoped library).
+//
+// Templates live at the organization level (available to every environment the
+// org has). Workflows that place a node from a template snapshot its code and
+// schemas into the node's config, so an edit to the template never breaks an
+// existing workflow. Templates travel through git sync under
+// zuzuflow/custom-nodes/<key>.json — `key` is the stable identifier preserved
+// across export/import, `originHash` detects drift vs. the committed blob.
+// -----------------------------------------------------------------------------
+
+model CustomNodeTemplate {
+  id             String   @id @default(uuid())
+  organizationId String
+  /// Stable, URL-safe slug preserved across export/import (e.g. "cn_a7b3k2m9pq")
+  key            String
+  name           String
+  description    String?
+  /// Lucide icon name
+  icon           String   @default("Puzzle")
+  /// Hex color used on the node header and palette accent
+  color          String   @default("#8b5cf6")
+  /// NodeCategory id (e.g. "utilities", "communication", "code")
+  category       String   @default("utilities")
+
+  /// Port design — { inputs: [{id,label}], outputs: [{id,label}] }
+  handles        Json
+  /// User-facing input fields — drives the auto-rendered form on placed nodes
+  inputsSchema   Json
+
+  /// "sandbox" (user TS code) | "http" (parameterized HTTP call)
+  executionMode  String
+  /// User-authored TS source for sandbox mode
+  code           String?
+  /// HTTP template for http mode — { method,url,headers,queryParams,bodyTemplate }
+  httpTemplate   Json?
+  /// Optional — declares which credential shape the node expects
+  credentialType String?
+
+  /// Visible to every org on this self-hosted instance when true
+  isPublic       Boolean  @default(false)
+
+  /// Git sync bookkeeping
+  gitSyncedAt    DateTime?
+  originHash     String?
+
+  version        Int      @default(1)
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key])
+  @@index([organizationId])
+  @@index([isPublic])
+  @@map("custom_node_templates")
 }

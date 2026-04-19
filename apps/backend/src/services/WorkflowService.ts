@@ -9,6 +9,7 @@ import { getTemporalClient } from "../temporal/client";
 import { config } from "../config";
 import { tagService } from "./TagService";
 import { taskQueueResolver } from "./TaskQueueResolver";
+import { customNodeService } from "./CustomNodeService";
 import type {
   WorkflowTemplate,
   WorkflowNode,
@@ -63,6 +64,7 @@ const nodeKindSchema = z.enum([
   "ai_agent",
   // Code
   "custom_code",
+  "custom_builder",
   "debug",
   "ts_runner",
   "python_runner",
@@ -212,6 +214,38 @@ function flattenTags<T extends { tags?: { tag: { name: string } }[] }>(
   };
 }
 
+/**
+ * Custom-builder nodes in an imported/pulled workflow may reference template
+ * keys the target org doesn't yet have. Walk the template and auto-install
+ * any missing ones from the embedded snapshot — the safety net that keeps
+ * workflows running across git sync / cross-org import.
+ */
+async function autoInstallCustomNodeTemplates(
+  environmentId: string,
+  template: WorkflowTemplate,
+): Promise<void> {
+  const hasCustomBuilder = template.nodes.some(
+    (n) => n.kind === "custom_builder",
+  );
+  if (!hasCustomBuilder) return;
+  const env = await prisma.environment.findUnique({
+    where: { id: environmentId },
+    select: { organizationId: true },
+  });
+  if (!env) return;
+  try {
+    await customNodeService.ensureTemplatesExist(
+      env.organizationId,
+      template.nodes,
+    );
+  } catch (err) {
+    logger.warn("Auto-install of custom node templates failed", {
+      environmentId,
+      err,
+    });
+  }
+}
+
 export class WorkflowService {
   // ---------------------------------------------------------------------------
   // Create
@@ -224,6 +258,10 @@ export class WorkflowService {
         details: validation.errors,
       });
     }
+
+    // Auto-install any custom node templates referenced but not yet present in
+    // the target org. Safe to call even when there are none.
+    await autoInstallCustomNodeTemplates(input.environmentId, input.template);
 
     // Determine the stable key. User-supplied keys are validated; otherwise
     // generate one and retry on the (vanishingly rare) collision.
@@ -492,6 +530,10 @@ export class WorkflowService {
           details: validation.errors,
         });
       }
+      await autoInstallCustomNodeTemplates(
+        existing.environmentId,
+        input.template,
+      );
     }
 
     if (input.key !== undefined) assertValidKeyFormat(input.key);

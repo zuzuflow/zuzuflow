@@ -46,6 +46,7 @@ import type {
   LlmPromptConfig,
   AiAgentConfig,
   CustomCodeConfig,
+  CustomBuilderConfig,
   DebugConfig,
   AwsLambdaConfig,
   AwsSqsConfig,
@@ -384,6 +385,24 @@ async function run(input: Record<string, unknown>) {
 const defaultDebugConfig: DebugConfig = {
   label: "Debug Output",
   breakpoint: false,
+};
+
+// Placeholder — real snapshots come from a CustomNodeTemplate at drop-time.
+const defaultCustomBuilderConfig: CustomBuilderConfig = {
+  templateId: "",
+  templateKey: "",
+  templateVersion: 1,
+  name: "Custom Node",
+  icon: "Puzzle",
+  color: "#8b5cf6",
+  category: "utilities",
+  inputs: [{ id: "in", label: "in" }],
+  outputs: [{ id: "out", label: "out" }],
+  inputsSchema: [],
+  executionMode: "sandbox",
+  code: "",
+  templateInputs: {},
+  credentialRef: null,
 };
 
 // =============================================================================
@@ -912,6 +931,19 @@ export const nodeRegistry: Record<NodeKind, NodeRegistryEntry> = {
     defaultLabel: "Custom Code",
     defaultConfig: defaultCustomCodeConfig,
     handles: ACTION_HANDLES,
+  },
+  custom_builder: {
+    // Hidden: placed via the "Custom Nodes" palette section, not the default
+    // category list. Handles and display come from each node's own snapshot.
+    label: "Custom Node",
+    category: "code",
+    color: "#8b5cf6",
+    icon: "Puzzle",
+    description: "User-authored node kind — snapshot at drop time",
+    defaultLabel: "Custom Node",
+    defaultConfig: defaultCustomBuilderConfig,
+    handles: ACTION_HANDLES,
+    hidden: true,
   },
   debug: {
     label: "Debug",

@@ -21,6 +21,7 @@ import { HttpRequestForm } from "./forms/HttpRequestForm";
 import { SendEmailForm } from "./forms/SendEmailForm";
 import { PostgresForm } from "./forms/PostgresForm";
 import { CustomCodeForm } from "./forms/CustomCodeForm";
+import { CustomBuilderForm } from "./forms/CustomBuilderForm";
 import { RabbitMQForm } from "./forms/RabbitMQForm";
 import { WorkflowTriggerInForm } from "./forms/WorkflowTriggerInForm";
 import { WorkflowTriggerOutForm } from "./forms/WorkflowTriggerOutForm";
@@ -77,6 +78,7 @@ import type {
   SendEmailConfig,
   PostgresConfig,
   CustomCodeConfig,
+  CustomBuilderConfig,
   WorkflowTriggerInConfig,
   WorkflowTriggerOutConfig,
   StopConfig,
@@ -201,6 +203,13 @@ function renderForm(
         <CustomCodeForm
           config={config as CustomCodeConfig}
           onChange={onChange as (p: Partial<CustomCodeConfig>) => void}
+        />
+      );
+    case "custom_builder":
+      return (
+        <CustomBuilderForm
+          config={config as CustomBuilderConfig}
+          onChange={onChange as (p: Partial<CustomBuilderConfig>) => void}
         />
       );
     case "rabbitmq":

@@ -59,6 +59,7 @@ export type NodeKind =
   | "js_runner"
   | "ts_runner"
   | "custom_code"
+  | "custom_builder"
   | "python_runner"
   | "debug"
   // ── AWS Cloud ────────────────────────────────────────────────────────────────
@@ -614,6 +615,86 @@ export interface CustomCodeConfig {
   memoryMb?: number;
 }
 
+// =============================================================================
+// Custom Builder — user-authored reusable node kind ("the in-app custom node")
+//
+// The config below is the snapshot copied from a CustomNodeTemplate when the
+// node is dropped on the canvas. Everything needed to render and execute the
+// node lives in this struct so workflows stay self-contained across
+// git sync / cross-org import — even if the source template is later edited
+// or deleted.
+// =============================================================================
+
+export interface CustomBuilderHandle {
+  id: string;
+  label: string;
+}
+
+export type CustomBuilderInputType =
+  | "string"
+  | "number"
+  | "boolean"
+  | "select"
+  | "textarea"
+  | "json"
+  | "credential";
+
+export interface CustomBuilderInputField {
+  /** Key in templateInputs — stable identifier */
+  name: string;
+  label: string;
+  type: CustomBuilderInputType;
+  required?: boolean;
+  default?: unknown;
+  /** For type="select" */
+  options?: { value: string; label: string }[];
+  description?: string;
+}
+
+export interface CustomBuilderHttpTemplate {
+  method: string;
+  url: string;
+  headers?: { key: string; value: string }[];
+  queryParams?: { key: string; value: string }[];
+  /** Body template — supports {{fields.X}} and {{nodeId.field}} interpolation */
+  bodyTemplate?: string;
+}
+
+export interface CustomBuilderConfig {
+  /** DB id of the source template (for "upgrade to latest" UX) */
+  templateId: string;
+  /** Stable slug, e.g. "cn_a7b3k2m9pq" — survives git sync & cross-env import */
+  templateKey: string;
+  /** Template version at drop-time */
+  templateVersion: number;
+
+  // ── Display snapshot ──────────────────────────────────────────────────────
+  name: string;
+  icon: string;
+  color: string;
+  category: string;
+
+  // ── Port design snapshot ──────────────────────────────────────────────────
+  inputs: CustomBuilderHandle[];
+  outputs: CustomBuilderHandle[];
+  inputsSchema: CustomBuilderInputField[];
+
+  // ── Execution snapshot ────────────────────────────────────────────────────
+  executionMode: "sandbox" | "http";
+  /** TS source — when executionMode === "sandbox" */
+  code?: string;
+  /** Parameterized HTTP call — when executionMode === "http" */
+  httpTemplate?: CustomBuilderHttpTemplate;
+  /** Optional — declares which credential shape is required */
+  credentialType?: string;
+
+  // ── Per-node user input on the canvas ─────────────────────────────────────
+  templateInputs: Record<string, unknown>;
+  credentialRef?: { credentialId: string } | null;
+  timeoutMs?: number;
+  memoryMb?: number;
+}
+
 export interface DebugConfig {
   label?: string;
   breakpoint?: boolean;
@@ -949,6 +1030,7 @@ export type NodeConfig =
   | TsRunnerConfig
   | PythonRunnerConfig
   | CustomCodeConfig
+  | CustomBuilderConfig
   | DebugConfig
   // AWS Cloud
   | AwsLambdaConfig
