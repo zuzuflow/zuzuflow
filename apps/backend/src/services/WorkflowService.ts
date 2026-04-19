@@ -68,6 +68,8 @@ const nodeKindSchema = z.enum([
   "debug",
   "ts_runner",
   "python_runner",
+  // Canvas-only — no execution semantics, GraphInterpreter no-ops
+  "group",
   // Subworkflows
   "subworkflow_call",
   "subflow_input",
@@ -114,6 +116,8 @@ const workflowNodeSchema = z.object({
   config: z.record(z.unknown()),
   position: z.object({ x: z.number(), y: z.number() }).optional(),
   style: nodeStyleSchema,
+  /** xyflow parent link — set when the node is a child of a "group" */
+  parentId: z.string().optional(),
 });
 
 const edgeStyleSchema = z

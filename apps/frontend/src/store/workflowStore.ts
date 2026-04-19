@@ -16,6 +16,7 @@ import type {
   WorkflowNode,
   NodeStyle,
   EdgeStyle,
+  GroupConfig,
   WorkflowSettings,
 } from "@workflow/shared";
 import { nodeRegistry } from "../lib/nodeRegistry";
@@ -43,6 +44,13 @@ function asEdgeData(es: EdgeStyle): Record<string, unknown> {
 interface WorkflowState {
   nodes: FlowNode[];
   edges: FlowEdge[];
+  /** Multi-select: empty = none, length 1 = single node, 2+ = multi. */
+  selectedNodeIds: string[];
+  selectedEdgeIds: string[];
+  /**
+   * Back-compat derived value — first (and only) selection if exactly one
+   * node is selected; null otherwise. Existing call sites read this.
+   */
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
   workflowId: string | null;
@@ -64,6 +72,10 @@ interface WorkflowState {
   // Selection
   selectNode: (id: string | null) => void;
   selectEdge: (id: string | null) => void;
+  /** Replace the node selection with `ids`; clears edge selection. */
+  selectNodes: (ids: string[]) => void;
+  /** Replace the edge selection with `ids`; clears node selection. */
+  selectEdges: (ids: string[]) => void;
 
   // Node mutations
   updateNodeConfig: (nodeId: string, config: Partial<NodeConfig>) => void;
@@ -75,6 +87,22 @@ interface WorkflowState {
     configOverride?: Partial<NodeConfig>,
   ) => void;
   removeNode: (nodeId: string) => void;
+  /**
+   * Batch delete. Cascades edges; if a deleted node is a group, its children
+   * are re-parented to null (world-relative positions preserved) — the group
+   * just vanishes.
+   */
+  removeNodes: (ids: string[]) => void;
+
+  // Grouping
+  /**
+   * Wrap the given node ids in a new "group" node. Returns the new group id,
+   * or null if the operation was rejected (e.g. any child already belongs to
+   * a different group — nested groups are not supported in v1).
+   */
+  groupNodes: (ids: string[], opts?: { locked?: boolean }) => string | null;
+  /** Dissolve a group — children keep their world positions, group is removed. */
+  ungroupNode: (groupId: string) => void;
 
   // Edge mutations
   updateEdgeStyle: (edgeId: string, style: EdgeStyle) => void;
@@ -113,6 +141,8 @@ interface WorkflowState {
 export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   nodes: [],
   edges: [],
+  selectedNodeIds: [],
+  selectedEdgeIds: [],
   selectedNodeId: null,
   selectedEdgeId: null,
   workflowId: null,
@@ -157,9 +187,37 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }));
   },
 
-  selectNode: (id) => set({ selectedNodeId: id, selectedEdgeId: null }),
+  selectNode: (id) =>
+    set({
+      selectedNodeIds: id ? [id] : [],
+      selectedEdgeIds: [],
+      selectedNodeId: id,
+      selectedEdgeId: null,
+    }),
 
-  selectEdge: (id) => set({ selectedEdgeId: id, selectedNodeId: null }),
+  selectEdge: (id) =>
+    set({
+      selectedEdgeIds: id ? [id] : [],
+      selectedNodeIds: [],
+      selectedEdgeId: id,
+      selectedNodeId: null,
+    }),
+
+  selectNodes: (ids) =>
+    set({
+      selectedNodeIds: ids,
+      selectedEdgeIds: [],
+      selectedNodeId: ids.length === 1 ? ids[0] : null,
+      selectedEdgeId: null,
+    }),
+
+  selectEdges: (ids) =>
+    set({
+      selectedEdgeIds: ids,
+      selectedNodeIds: [],
+      selectedEdgeId: ids.length === 1 ? ids[0] : null,
+      selectedNodeId: null,
+    }),
 
   updateNodeConfig: (nodeId, configPatch) => {
     set((state) => ({
@@ -239,24 +297,203 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   removeNode: (nodeId) => {
-    set((state) => ({
-      nodes: state.nodes.filter((n) => n.id !== nodeId),
-      edges: state.edges.filter(
-        (e) => e.source !== nodeId && e.target !== nodeId,
-      ),
-      selectedNodeId:
-        state.selectedNodeId === nodeId ? null : state.selectedNodeId,
+    get().removeNodes([nodeId]);
+  },
+
+  removeNodes: (ids) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    set((state) => {
+      // When a group is deleted, its children are orphaned — keep them on the
+      // canvas with their world-space position restored.
+      const deletedGroups = state.nodes.filter(
+        (n) => idSet.has(n.id) && n.type === "group",
+      );
+      const groupPosById = new Map(
+        deletedGroups.map((g) => [g.id, g.position]),
+      );
+
+      const nextNodes: FlowNode[] = [];
+      for (const n of state.nodes) {
+        if (idSet.has(n.id)) continue;
+        const parentId = (n as FlowNode & { parentId?: string }).parentId;
+        if (parentId && groupPosById.has(parentId)) {
+          const gp = groupPosById.get(parentId)!;
+          const wn = getNodeData(n);
+          const worldPos = {
+            x: (wn.position?.x ?? 0) + gp.x,
+            y: (wn.position?.y ?? 0) + gp.y,
+          };
+          nextNodes.push({
+            ...n,
+            position: { x: n.position.x + gp.x, y: n.position.y + gp.y },
+            parentId: undefined,
+            extent: undefined,
+            data: asData({ ...wn, parentId: undefined, position: worldPos }),
+          });
+        } else {
+          nextNodes.push(n);
+        }
+      }
+      const nextEdges = state.edges.filter(
+        (e) => !idSet.has(e.source) && !idSet.has(e.target),
+      );
+      const nextSelected = state.selectedNodeIds.filter((id) => !idSet.has(id));
+      return {
+        nodes: nextNodes,
+        edges: nextEdges,
+        selectedNodeIds: nextSelected,
+        selectedNodeId: nextSelected.length === 1 ? nextSelected[0] : null,
+        isDirty: true,
+      };
+    });
+  },
+
+  groupNodes: (ids, opts) => {
+    if (ids.length < 2) return null;
+    const state = get();
+    const selected = state.nodes.filter((n) => ids.includes(n.id));
+    if (selected.length !== ids.length) return null;
+    // Reject if any selected node is a group, or already belongs to a group.
+    for (const n of selected) {
+      if (n.type === "group") return null;
+      if ((n as FlowNode & { parentId?: string }).parentId) return null;
+    }
+
+    const PADDING = 40;
+    const HEADER = 28; // extra top padding for the label chip
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
+    for (const n of selected) {
+      const w = n.width ?? 240;
+      const h = n.height ?? 80;
+      minX = Math.min(minX, n.position.x);
+      minY = Math.min(minY, n.position.y);
+      maxX = Math.max(maxX, n.position.x + w);
+      maxY = Math.max(maxY, n.position.y + h);
+    }
+    const groupPos = { x: minX - PADDING, y: minY - PADDING - HEADER };
+    const width = maxX - minX + PADDING * 2;
+    const height = maxY - minY + PADDING * 2 + HEADER;
+
+    const groupId = uuidv4();
+    const cfg: GroupConfig = {
+      label: "Group",
+      color: "#64748b",
+      locked: opts?.locked ?? true,
+      width,
+      height,
+    };
+    const groupWn: WorkflowNode = {
+      id: groupId,
+      kind: "group",
+      label: "Group",
+      config: cfg,
+      position: groupPos,
+    };
+    const groupFlowNode: FlowNode = {
+      id: groupId,
+      type: "group",
+      position: groupPos,
+      data: asData(groupWn),
+      // Make sure the group paints BEHIND its children.
+      zIndex: -1,
+    };
+
+    const idSet = new Set(ids);
+    const updatedChildren = state.nodes.map((n) => {
+      if (!idSet.has(n.id)) return n;
+      const wn = getNodeData(n);
+      const relPos = {
+        x: n.position.x - groupPos.x,
+        y: n.position.y - groupPos.y,
+      };
+      return {
+        ...n,
+        position: relPos,
+        parentId: groupId,
+        extent: "parent" as const,
+        data: asData({ ...wn, parentId: groupId, position: relPos }),
+      };
+    });
+
+    // xyflow requires the parent to appear before its children in the array.
+    set({
+      nodes: [groupFlowNode, ...updatedChildren],
+      selectedNodeIds: [groupId],
+      selectedNodeId: groupId,
+      selectedEdgeIds: [],
+      selectedEdgeId: null,
       isDirty: true,
-    }));
+    });
+    return groupId;
+  },
+
+  ungroupNode: (groupId) => {
+    set((state) => {
+      const group = state.nodes.find(
+        (n) => n.id === groupId && n.type === "group",
+      );
+      if (!group) return state;
+      const gp = group.position;
+      const nextNodes: FlowNode[] = [];
+      for (const n of state.nodes) {
+        if (n.id === groupId) continue;
+        const parentId = (n as FlowNode & { parentId?: string }).parentId;
+        if (parentId === groupId) {
+          const wn = getNodeData(n);
+          const worldPos = { x: n.position.x + gp.x, y: n.position.y + gp.y };
+          nextNodes.push({
+            ...n,
+            position: worldPos,
+            parentId: undefined,
+            extent: undefined,
+            data: asData({ ...wn, parentId: undefined, position: worldPos }),
+          });
+        } else {
+          nextNodes.push(n);
+        }
+      }
+      return {
+        nodes: nextNodes,
+        selectedNodeIds: [],
+        selectedNodeId: null,
+        selectedEdgeIds: [],
+        selectedEdgeId: null,
+        isDirty: true,
+      };
+    });
   },
 
   loadTemplate: (template, workflowId, name, status, tags, workflowKey) => {
-    const nodes: FlowNode[] = template.nodes.map((wn) => ({
-      id: wn.id,
-      type: wn.kind,
-      position: wn.position ?? { x: 0, y: 0 },
-      data: asData(wn),
-    }));
+    // xyflow requires parent nodes to appear before their children in the
+    // array, or they won't render. Sort groups first, everything else after.
+    const sortedTemplateNodes = [...template.nodes].sort((a, b) => {
+      if (a.kind === "group" && b.kind !== "group") return -1;
+      if (b.kind === "group" && a.kind !== "group") return 1;
+      return 0;
+    });
+    const nodes: FlowNode[] = sortedTemplateNodes.map((wn) => {
+      const base: FlowNode = {
+        id: wn.id,
+        type: wn.kind,
+        position: wn.position ?? { x: 0, y: 0 },
+        data: asData(wn),
+      };
+      if (wn.parentId) {
+        return {
+          ...base,
+          parentId: wn.parentId,
+          extent: "parent" as const,
+        };
+      }
+      if (wn.kind === "group") {
+        return { ...base, zIndex: -1 };
+      }
+      return base;
+    });
 
     const edges: FlowEdge[] = template.edges.map((we) => ({
       id: we.id,
@@ -278,7 +515,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       workflowName: name ?? get().workflowName,
       workflowStatus: status ?? get().workflowStatus,
       tags: tags ?? [],
+      selectedNodeIds: [],
+      selectedEdgeIds: [],
       selectedNodeId: null,
+      selectedEdgeId: null,
       isDirty: false,
     });
   },
@@ -342,6 +582,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     set({
       nodes: [],
       edges: [],
+      selectedNodeIds: [],
+      selectedEdgeIds: [],
       selectedNodeId: null,
       selectedEdgeId: null,
       workflowId: null,

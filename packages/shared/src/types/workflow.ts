@@ -62,6 +62,8 @@ export type NodeKind =
   | "custom_builder"
   | "python_runner"
   | "debug"
+  // ── Canvas-only (no execution semantics) ─────────────────────────────────────
+  | "group"
   // ── AWS Cloud ────────────────────────────────────────────────────────────────
   | "aws_lambda"
   | "aws_sqs"
@@ -76,6 +78,22 @@ export type NodeKind =
 // =============================================================================
 // Trigger node configs
 // =============================================================================
+
+// ─── Manual / Immediate trigger ──────────────────────────────────────────────
+//
+// Runs the workflow immediately (on "Run" from the UI or via the SDK). An
+// explicit `triggerPayload` on the API call always wins; otherwise the
+// configured `value` is coerced by `valueType` and used as the trigger
+// payload. Useful for parameterising a workflow with a static test input.
+
+export type ManualTriggerValueType = "string" | "number" | "boolean" | "json";
+
+export interface ManualTriggerConfig {
+  /** Raw string value entered in the form. Coerced to `valueType` at runtime. */
+  value?: string;
+  /** How to parse `value`. Default "json" preserves object/array payloads. */
+  valueType?: ManualTriggerValueType;
+}
 
 // ─── Webhook auth ────────────────────────────────────────────────────────────
 
@@ -616,6 +634,26 @@ export interface CustomCodeConfig {
 }
 
 // =============================================================================
+// Group — canvas-only container for visual organisation
+//
+// A "group" node has no handles and carries no execution semantics (the
+// GraphInterpreter no-ops the kind). Children declare `parentId` pointing at
+// the group; their `position` becomes parent-relative while grouped, world-
+// relative after ungrouping. When `locked: true`, children are not individually
+// draggable or deletable — the whole group moves as a unit.
+// =============================================================================
+
+export interface GroupConfig {
+  label?: string;
+  /** Hex colour for the dotted border + translucent fill background. */
+  color?: string;
+  /** When true, children are frozen — no individual drag, no individual delete. */
+  locked: boolean;
+  width: number;
+  height: number;
+}
+
+// =============================================================================
 // Custom Builder — user-authored reusable node kind ("the in-app custom node")
 //
 // The config below is the snapshot copied from a CustomNodeTemplate when the
@@ -978,6 +1016,7 @@ export interface AwsStepFunctionsConfig extends AwsBaseConfig {
 
 export type NodeConfig =
   // Triggers
+  | ManualTriggerConfig
   | WebhookConfig
   | CronConfig
   | MqttConfig
@@ -1032,6 +1071,7 @@ export type NodeConfig =
   | CustomCodeConfig
   | CustomBuilderConfig
   | DebugConfig
+  | GroupConfig
   // AWS Cloud
   | AwsLambdaConfig
   | AwsSqsConfig
@@ -1078,6 +1118,12 @@ export interface WorkflowNode {
   position?: { x: number; y: number };
   /** Per-node visual style overrides */
   style?: NodeStyle;
+  /**
+   * xyflow parent-child link. When set, this node is a child of a "group"
+   * node with this id; its `position` is parent-relative. Ungrouping rewrites
+   * positions back to world space and clears this field.
+   */
+  parentId?: string;
 }
 
 export interface WorkflowEdge {

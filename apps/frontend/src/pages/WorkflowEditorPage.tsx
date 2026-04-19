@@ -10,6 +10,7 @@ import { useWorkflowStore } from "../store/workflowStore";
 import { useExecutionStore } from "../store/executionStore";
 import { AiBuilderFab } from "../components/ai/AiBuilderFab";
 import { CustomNodeBuilder } from "../components/custom-nodes/CustomNodeBuilder";
+import { useCanvasShortcuts } from "../hooks/useCanvasShortcuts";
 import * as api from "../lib/api";
 
 export function WorkflowEditorPage(): React.ReactElement {
@@ -18,6 +19,8 @@ export function WorkflowEditorPage(): React.ReactElement {
   const location = useLocation();
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
   const selectedEdgeId = useWorkflowStore((s) => s.selectedEdgeId);
+  const selectedNodeIds = useWorkflowStore((s) => s.selectedNodeIds);
+  useCanvasShortcuts();
   const loadTemplate = useWorkflowStore((s) => s.loadTemplate);
   const resetWorkflow = useWorkflowStore((s) => s.resetWorkflow);
   const addNode = useWorkflowStore((s) => s.addNode);
@@ -160,7 +163,9 @@ export function WorkflowEditorPage(): React.ReactElement {
         <div className="flex-1 relative overflow-hidden">
           <WorkflowCanvas />
         </div>
-        {(selectedNodeId || selectedEdgeId) && <PropertiesPanel />}
+        {(selectedNodeId || selectedEdgeId || selectedNodeIds.length > 1) && (
+          <PropertiesPanel />
+        )}
       </div>
 
       <ExecutionLog />

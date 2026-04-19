@@ -643,8 +643,48 @@ export async function graphInterpreterWorkflow(
         switch (node.kind as NodeKind) {
           // ------------------------------------------------------------------
           // Trigger nodes — their output IS the trigger payload.
+          //
+          // Special case for "manual" / "Immediate": if no explicit trigger
+          // payload was passed on /executions/start, use the configured
+          // static value (coerced by its valueType). An explicit payload
+          // always wins so SDK callers can override from the outside.
           // ------------------------------------------------------------------
-          case "manual":
+          case "manual": {
+            const hasExplicit =
+              triggerPayload &&
+              typeof triggerPayload === "object" &&
+              Object.keys(triggerPayload as Record<string, unknown>).length > 0;
+            if (hasExplicit) {
+              nodeOutput = triggerPayload;
+            } else {
+              const cfg = node.config as {
+                value?: string;
+                valueType?: "string" | "number" | "boolean" | "json";
+              };
+              const raw = cfg.value;
+              if (raw !== undefined && raw !== "") {
+                const type = cfg.valueType ?? "json";
+                if (type === "string") {
+                  nodeOutput = raw;
+                } else if (type === "number") {
+                  const n = Number(raw);
+                  nodeOutput = Number.isFinite(n) ? n : raw;
+                } else if (type === "boolean") {
+                  nodeOutput = raw.trim().toLowerCase() === "true";
+                } else {
+                  try {
+                    nodeOutput = JSON.parse(raw);
+                  } catch {
+                    nodeOutput = raw;
+                  }
+                }
+              } else {
+                nodeOutput = triggerPayload;
+              }
+            }
+            outgoingHandles = [""];
+            break;
+          }
           case "cron":
           case "mqtt_trigger":
           case "external_trigger": {
@@ -784,6 +824,21 @@ export async function graphInterpreterWorkflow(
               config: cfg,
               context: nodeOutputs,
             });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Group — canvas-only container. No execution semantics: pass any
+          // upstream output through unchanged (groups have no handles in the
+          // UI, so this branch is defensive — reached only if a malformed
+          // template wires an edge to a group).
+          // ------------------------------------------------------------------
+          case "group": {
+            nodeOutput =
+              incomingFrom !== undefined
+                ? (nodeOutputs[incomingFrom] ?? {})
+                : {};
             outgoingHandles = [""];
             break;
           }

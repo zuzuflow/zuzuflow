@@ -10,6 +10,7 @@ import { useWorkflowStore } from "../../store/workflowStore";
 import { nodeRegistry } from "../../lib/nodeRegistry";
 
 // Form components
+import { ManualTriggerForm } from "./forms/ManualTriggerForm";
 import { WebhookForm } from "./forms/WebhookForm";
 import { CronForm } from "./forms/CronForm";
 import { MqttForm } from "./forms/MqttForm";
@@ -22,6 +23,8 @@ import { SendEmailForm } from "./forms/SendEmailForm";
 import { PostgresForm } from "./forms/PostgresForm";
 import { CustomCodeForm } from "./forms/CustomCodeForm";
 import { CustomBuilderForm } from "./forms/CustomBuilderForm";
+import { GroupForm } from "./forms/GroupForm";
+import { MultiSelectPanel } from "./forms/MultiSelectPanel";
 import { RabbitMQForm } from "./forms/RabbitMQForm";
 import { WorkflowTriggerInForm } from "./forms/WorkflowTriggerInForm";
 import { WorkflowTriggerOutForm } from "./forms/WorkflowTriggerOutForm";
@@ -66,6 +69,7 @@ import { AwsEventBridgeForm } from "./forms/AwsEventBridgeForm";
 import { AwsStepFunctionsForm } from "./forms/AwsStepFunctionsForm";
 
 import type {
+  ManualTriggerConfig,
   WebhookConfig,
   CronConfig,
   MqttConfig,
@@ -79,6 +83,7 @@ import type {
   PostgresConfig,
   CustomCodeConfig,
   CustomBuilderConfig,
+  GroupConfig,
   WorkflowTriggerInConfig,
   WorkflowTriggerOutConfig,
   StopConfig,
@@ -128,6 +133,13 @@ function renderForm(
   onChange: (patch: Partial<NodeConfig>) => void,
 ): React.ReactElement | null {
   switch (kind) {
+    case "manual":
+      return (
+        <ManualTriggerForm
+          config={config as ManualTriggerConfig}
+          onChange={onChange as (p: Partial<ManualTriggerConfig>) => void}
+        />
+      );
     case "webhook":
       return (
         <WebhookForm
@@ -210,6 +222,13 @@ function renderForm(
         <CustomBuilderForm
           config={config as CustomBuilderConfig}
           onChange={onChange as (p: Partial<CustomBuilderConfig>) => void}
+        />
+      );
+    case "group":
+      return (
+        <GroupForm
+          config={config as GroupConfig}
+          onChange={onChange as (p: Partial<GroupConfig>) => void}
         />
       );
     case "rabbitmq":
@@ -650,6 +669,7 @@ function EdgeAppearancePanel(): React.ReactElement | null {
 // ─── Main Properties Panel ────────────────────────────────────────────────────
 
 export function PropertiesPanel(): React.ReactElement | null {
+  const selectedNodeIds = useWorkflowStore((s) => s.selectedNodeIds);
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
   const selectedEdgeId = useWorkflowStore((s) => s.selectedEdgeId);
   const nodes = useWorkflowStore((s) => s.nodes);
@@ -659,6 +679,16 @@ export function PropertiesPanel(): React.ReactElement | null {
   const updateNodeStyle = useWorkflowStore((s) => s.updateNodeStyle);
   const removeNode = useWorkflowStore((s) => s.removeNode);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
+
+  // Multi-select: show a summary + batch actions. Takes priority over the
+  // per-node form, since no single node is "the" selection.
+  if (selectedNodeIds.length > 1) {
+    return (
+      <aside className="w-80 h-full bg-card border-l border-border flex flex-col overflow-hidden shrink-0">
+        <MultiSelectPanel />
+      </aside>
+    );
+  }
 
   if (selectedEdgeId) return <EdgeAppearancePanel />;
   if (!selectedNodeId) return null;

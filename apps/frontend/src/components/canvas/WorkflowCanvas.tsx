@@ -21,6 +21,7 @@ import { useExecutionStore } from "../../store/executionStore";
 import { useCanvasDesignStore } from "../../store/canvasDesignStore";
 import { nodeRegistry } from "../../lib/nodeRegistry";
 import { AnimatedEdge } from "./AnimatedEdge";
+import { SelectionToolbar } from "./SelectionToolbar";
 
 // Node components
 import { ManualTriggerNode } from "../nodes/ManualTriggerNode";
@@ -38,6 +39,7 @@ import { SendEmailNode } from "../nodes/SendEmailNode";
 import { PostgresNode } from "../nodes/PostgresNode";
 import { CustomCodeNode } from "../nodes/CustomCodeNode";
 import { CustomBuilderNode } from "../nodes/CustomBuilderNode";
+import { GroupNode } from "../nodes/GroupNode";
 import { DebugNode } from "../nodes/DebugNode";
 import { RabbitMQNode } from "../nodes/RabbitMQNode";
 import { WorkflowTriggerInNode } from "../nodes/WorkflowTriggerInNode";
@@ -85,6 +87,8 @@ import type {
   SubworkflowCallConfig,
   CustomBuilderConfig,
   CustomBuilderInputField,
+  GroupConfig,
+  WorkflowNode,
 } from "@workflow/shared";
 import { getCustomNodeTemplate } from "../../lib/api";
 
@@ -126,6 +130,7 @@ const nodeTypes = {
   twilio_email: TwilioEmailNode,
   custom_code: CustomCodeNode,
   custom_builder: CustomBuilderNode,
+  group: GroupNode,
   debug: DebugNode,
   llm_prompt: LlmPromptNode,
   ai_agent: AiAgentNode,
@@ -169,12 +174,26 @@ function Canvas(): React.ReactElement {
   const onConnect = useWorkflowStore((s) => s.onConnect) as OnConnect;
   const selectNode = useWorkflowStore((s) => s.selectNode);
   const selectEdge = useWorkflowStore((s) => s.selectEdge);
+  const selectNodes = useWorkflowStore((s) => s.selectNodes);
+  const selectEdges = useWorkflowStore((s) => s.selectEdges);
   const addNode = useWorkflowStore((s) => s.addNode);
   const nodeStatuses = useExecutionStore((s) => s.nodeStatuses);
   const theme = useCanvasDesignStore((s) => s.theme);
 
-  // Apply status classes via className on nodes
+  // Apply status classes + freeze children of locked groups.
+  //
+  // Children of a locked group must not be individually draggable or
+  // deletable — only the group itself can be moved or removed until it's
+  // unlocked or ungrouped. xyflow respects per-node `draggable`/`deletable`.
   const styledNodes = useMemo(() => {
+    const lockedGroupIds = new Set<string>();
+    for (const n of nodes) {
+      if (n.type !== "group") continue;
+      const wn = n.data as unknown as WorkflowNode;
+      const cfg = wn.config as GroupConfig | undefined;
+      if (cfg?.locked) lockedGroupIds.add(n.id);
+    }
+
     return nodes.map((n) => {
       const status = nodeStatuses[n.id];
       const statusClass = status
@@ -186,9 +205,15 @@ function Canvas(): React.ReactElement {
           }[status]
         : undefined;
 
+      const parentId = (n as typeof n & { parentId?: string }).parentId;
+      const frozen = parentId ? lockedGroupIds.has(parentId) : false;
+
       return {
         ...n,
         className: statusClass,
+        ...(frozen
+          ? { draggable: false, deletable: false }
+          : {}),
       };
     });
   }, [nodes, nodeStatuses]);
@@ -284,6 +309,19 @@ function Canvas(): React.ReactElement {
     [screenToFlowPosition, addNode],
   );
 
+  // xyflow fires this whenever its native selection set changes (Shift-click,
+  // Shift-drag box select, or programmatic). Mirror it into the store so
+  // Toolbar / PropertiesPanel / shortcuts all react to the multi-set.
+  const handleSelectionChange = useCallback(
+    (params: { nodes: { id: string }[]; edges: { id: string }[] }) => {
+      selectNodes(params.nodes.map((n) => n.id));
+      if (params.edges.length > 0) {
+        selectEdges(params.edges.map((e) => e.id));
+      }
+    },
+    [selectNodes, selectEdges],
+  );
+
   const miniMapNodeColor = useCallback((node: { type?: string }) => {
     const kind = node.type as NodeKind | undefined;
     if (!kind || !nodeRegistry[kind]) return "#334155";
@@ -293,7 +331,8 @@ function Canvas(): React.ReactElement {
   const isLight = theme === "bpmn-light";
 
   return (
-    <div className={`w-full h-full ${isLight ? "theme-bpmn-light" : ""}`}>
+    <div className={`relative w-full h-full ${isLight ? "theme-bpmn-light" : ""}`}>
+      <SelectionToolbar />
       <ReactFlow
         nodes={styledNodes}
         edges={edges}
@@ -312,6 +351,7 @@ function Canvas(): React.ReactElement {
         onPaneClick={handlePaneClick}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
+        onSelectionChange={handleSelectionChange}
         fitView
         fitViewOptions={{ padding: 0.4, maxZoom: 0.6 }}
         defaultViewport={{ x: 0, y: 0, zoom: 0.6 }}
@@ -319,9 +359,12 @@ function Canvas(): React.ReactElement {
         maxZoom={2}
         deleteKeyCode={["Delete", "Backspace"]}
         multiSelectionKeyCode="Shift"
+        selectionKeyCode="Shift"
         panActivationKeyCode={null}
         panOnScroll
-        selectionOnDrag={false}
+        // Hold Shift and drag on empty canvas = rectangle-select. Plain drag
+        // continues to pan (xyflow's panOnDrag default).
+        selectionOnDrag
         defaultEdgeOptions={{ type: "animated" }}
       >
         <MiniMap

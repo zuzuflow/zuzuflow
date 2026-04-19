@@ -1,6 +1,7 @@
 import type {
   NodeKind,
   NodeConfig,
+  ManualTriggerConfig,
   WebhookConfig,
   CronConfig,
   MqttConfig,
@@ -47,6 +48,7 @@ import type {
   AiAgentConfig,
   CustomCodeConfig,
   CustomBuilderConfig,
+  GroupConfig,
   DebugConfig,
   AwsLambdaConfig,
   AwsSqsConfig,
@@ -109,6 +111,11 @@ export interface NodeRegistryEntry {
 // =============================================================================
 // Default configs
 // =============================================================================
+
+const defaultManualConfig: ManualTriggerConfig = {
+  value: "",
+  valueType: "json",
+};
 
 const defaultWebhookConfig: WebhookConfig = {
   path: "my-webhook",
@@ -387,6 +394,15 @@ const defaultDebugConfig: DebugConfig = {
   breakpoint: false,
 };
 
+// Default group config — created from multi-selection, never from the palette.
+const defaultGroupConfig: GroupConfig = {
+  label: "Group",
+  color: "#64748b",
+  locked: true,
+  width: 280,
+  height: 180,
+};
+
 // Placeholder — real snapshots come from a CustomNodeTemplate at drop-time.
 const defaultCustomBuilderConfig: CustomBuilderConfig = {
   templateId: "",
@@ -425,13 +441,14 @@ export const nodeRegistry: Record<NodeKind, NodeRegistryEntry> = {
   // ── TRIGGERS ────────────────────────────────────────────────────────────────
 
   manual: {
-    label: "Manual Trigger",
+    label: "Immediate",
     category: "trigger",
     color: "#7c3aed",
-    icon: "MousePointerClick",
-    description: "Run workflow immediately on demand",
-    defaultLabel: "Manual Trigger",
-    defaultConfig: {},
+    icon: "Play",
+    description:
+      "Run the workflow immediately with an optional typed input payload",
+    defaultLabel: "Immediate",
+    defaultConfig: defaultManualConfig,
     handles: TRIGGER_HANDLES,
   },
   webhook: {
@@ -943,6 +960,19 @@ export const nodeRegistry: Record<NodeKind, NodeRegistryEntry> = {
     defaultLabel: "Custom Node",
     defaultConfig: defaultCustomBuilderConfig,
     handles: ACTION_HANDLES,
+    hidden: true,
+  },
+  group: {
+    // Hidden: created from multi-selection via Cmd/Ctrl+G, never from palette.
+    // No handles — groups are purely visual containers.
+    label: "Group",
+    category: "logical",
+    color: "#64748b",
+    icon: "BoxSelect",
+    description: "Canvas-only container (Cmd/Ctrl+G on a multi-selection)",
+    defaultLabel: "Group",
+    defaultConfig: defaultGroupConfig,
+    handles: [],
     hidden: true,
   },
   debug: {
