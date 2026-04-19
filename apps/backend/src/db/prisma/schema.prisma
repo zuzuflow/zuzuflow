@@ -65,8 +65,29 @@ model Organization {
   environments Environment[]
   orgPlan      OrgPlan?
   invites      OrgInvite[]
+  aiSettings   OrgAiSettings?
 
   @@map("organizations")
+}
+
+// -----------------------------------------------------------------------------
+// OrgAiSettings — org-level AI workflow builder configuration
+// -----------------------------------------------------------------------------
+
+model OrgAiSettings {
+  id                String   @id @default(uuid())
+  organizationId    String   @unique
+  aiBuilderEnabled  Boolean  @default(false)
+  aiProvider        String?              // "openai" | "anthropic" | "gemini" | "ollama"
+  aiApiKeyEncrypted String?              // AES-256-GCM encrypted
+  aiApiKeyIv        String?              // IV for decryption
+  aiModel           String?              // e.g. "gpt-4o", "claude-sonnet-4-20250514"
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("org_ai_settings")
 }
 
 // -----------------------------------------------------------------------------

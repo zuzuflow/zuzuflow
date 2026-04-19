@@ -27,6 +27,7 @@ import {
   Lock,
   AlertTriangle,
   ShieldOff,
+  Bot,
 } from "lucide-react";
 import type {
   GitConfig,
@@ -79,7 +80,10 @@ import {
   disableEmailOtp,
   regenerateBackupCodes,
   adminResetMfa,
+  getAiSettings,
+  updateAiSettings,
 } from "../lib/api";
+import type { AiSettingsPublic } from "../lib/api";
 import { useEnvironmentStore } from "../store/environmentStore";
 import { cn } from "../lib/utils";
 import { toast } from "sonner";
@@ -147,9 +151,11 @@ function ResultPill({ ok, msg }: { ok: boolean; msg: string }) {
           : "text-red-400 bg-red-900/20 border-red-900/40",
       )}
     >
-      {ok
-        ? <CheckCircle2 size={12} className="shrink-0 mt-0.5" />
-        : <XCircle size={12} className="shrink-0 mt-0.5" />}
+      {ok ? (
+        <CheckCircle2 size={12} className="shrink-0 mt-0.5" />
+      ) : (
+        <XCircle size={12} className="shrink-0 mt-0.5" />
+      )}
       <span className="min-w-0 break-words">{msg}</span>
     </div>
   );
@@ -598,21 +604,29 @@ function UsersTab() {
 
   // Change password modal (still targets /auth/users/:id/password — works for
   // the current user and, for admins, for any user they can reach)
-  const [changePwUser, setChangePwUser] = useState<OrgMemberPublic | null>(null);
+  const [changePwUser, setChangePwUser] = useState<OrgMemberPublic | null>(
+    null,
+  );
   const [newPw, setNewPw] = useState("");
   const [showNewPw, setShowNewPw] = useState(false);
   const [changingPw, setChangingPw] = useState(false);
   const [changePwError, setChangePwError] = useState("");
 
   // Reset MFA dialog
-  const [mfaResetTarget, setMfaResetTarget] = useState<OrgMemberPublic | null>(null);
+  const [mfaResetTarget, setMfaResetTarget] = useState<OrgMemberPublic | null>(
+    null,
+  );
   const [resettingMfa, setResettingMfa] = useState(false);
 
   // Remove member dialog
-  const [removeTarget, setRemoveTarget] = useState<OrgMemberPublic | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<OrgMemberPublic | null>(
+    null,
+  );
 
   // Revoke invite dialog
-  const [revokeTarget, setRevokeTarget] = useState<OrgInvitePublic | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<OrgInvitePublic | null>(
+    null,
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -649,7 +663,9 @@ function UsersTab() {
     } catch (err) {
       // Roll back
       setMembers((prev) =>
-        prev.map((m) => (m.userId === member.userId ? { ...m, role: member.role } : m)),
+        prev.map((m) =>
+          m.userId === member.userId ? { ...m, role: member.role } : m,
+        ),
       );
       toast.error((err as Error).message);
     }
@@ -2225,6 +2241,176 @@ function SecurityTab() {
   );
 }
 
+// ─── AI Builder Tab ──────────────────────────────────────────────────────────
+
+const AI_PROVIDERS = [
+  { value: "openai", label: "OpenAI" },
+  { value: "anthropic", label: "Anthropic" },
+  { value: "gemini", label: "Google Gemini" },
+] as const;
+
+function AiBuilderTab() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [settings, setSettings] = useState<AiSettingsPublic | null>(null);
+  const [enabled, setEnabled] = useState(false);
+  const [provider, setProvider] = useState("");
+  const [model, setModel] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [saveResult, setSaveResult] = useState<{
+    ok: boolean;
+    msg: string;
+  } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await getAiSettings();
+        setSettings(data);
+        setEnabled(data.aiBuilderEnabled);
+        setProvider(data.aiProvider ?? "");
+        setModel(data.aiModel ?? "");
+      } catch {
+        /* no org context */
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  async function handleSave() {
+    setSaving(true);
+    setSaveResult(null);
+    try {
+      const payload: Parameters<typeof updateAiSettings>[0] = {
+        aiBuilderEnabled: enabled,
+        aiProvider: provider || null,
+        aiModel: model || null,
+      };
+      // Only send API key if user typed a new one
+      if (apiKey) {
+        payload.aiApiKey = apiKey;
+      }
+      const updated = await updateAiSettings(payload);
+      setSettings(updated);
+      setApiKey("");
+      setSaveResult({ ok: true, msg: "AI Builder settings saved." });
+    } catch (err) {
+      setSaveResult({ ok: false, msg: (err as Error).message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8 text-muted-foreground">
+        <Loader2 size={16} className="animate-spin mr-2" /> Loading…
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <Bot size={14} className="text-orange-400" />
+          <span className="text-sm font-medium text-foreground">
+            AI Workflow Builder
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground mb-4">
+          Enable AI-powered workflow generation. Members can describe
+          automations in natural language and have workflows built
+          automatically.
+        </p>
+      </div>
+
+      {/* Enable toggle */}
+      <div className="flex items-center justify-between rounded-md border border-border px-4 py-3">
+        <div>
+          <p className="text-sm font-medium text-foreground">
+            Enable AI Builder
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Show the AI assistant button on the workflow editor canvas
+          </p>
+        </div>
+        <Switch checked={enabled} onCheckedChange={setEnabled} />
+      </div>
+
+      {/* Provider */}
+      <div>
+        <label className={labelClass}>AI Provider</label>
+        <select
+          value={provider}
+          onChange={(e) => setProvider(e.target.value)}
+          className={inputClass}
+        >
+          <option value="">Select a provider…</option>
+          {AI_PROVIDERS.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Model */}
+      <div>
+        <label className={labelClass}>Model</label>
+        <input
+          className={inputClass}
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          placeholder={
+            provider === "anthropic"
+              ? "claude-sonnet-4-20250514"
+              : provider === "gemini"
+                ? "gemini-pro"
+                : "gpt-4o"
+          }
+        />
+      </div>
+
+      {/* API Key */}
+      <div>
+        <label className={labelClass}>API Key</label>
+        <input
+          type="password"
+          className={inputClass}
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder={
+            settings?.hasApiKey
+              ? "••••••••  (key saved — enter new to replace)"
+              : "Enter API key"
+          }
+        />
+        {settings?.hasApiKey && !apiKey && (
+          <p className="text-xs text-emerald-500 mt-1">
+            ✓ API key is configured
+          </p>
+        )}
+      </div>
+
+      {/* Save */}
+      <div className="flex items-center gap-3 pt-2">
+        <Button size="sm" onClick={handleSave} disabled={saving}>
+          {saving ? (
+            <Loader2 size={14} className="animate-spin mr-1.5" />
+          ) : (
+            <Save size={14} className="mr-1.5" />
+          )}
+          Save
+        </Button>
+        {saveResult && <ResultPill ok={saveResult.ok} msg={saveResult.msg} />}
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export function SettingsPage(): React.ReactElement {
@@ -2258,6 +2444,10 @@ export function SettingsPage(): React.ReactElement {
             <ShieldCheck size={13} className="mr-1.5" />
             Security
           </TabsTrigger>
+          <TabsTrigger value="ai-builder">
+            <Bot size={13} className="mr-1.5" />
+            AI Builder
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="organization">
           <OrganizationTab />
@@ -2276,6 +2466,9 @@ export function SettingsPage(): React.ReactElement {
         </TabsContent>
         <TabsContent value="security">
           <SecurityTab />
+        </TabsContent>
+        <TabsContent value="ai-builder">
+          <AiBuilderTab />
         </TabsContent>
       </Tabs>
     </div>

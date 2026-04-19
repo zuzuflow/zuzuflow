@@ -9,6 +9,7 @@ import { organizationService } from "../services/OrganizationService";
 import { mfaService } from "../services/MfaService";
 import { inviteService } from "../services/InviteService";
 import { emailService } from "../services/EmailService";
+import { orgSettingsService } from "../services/OrgSettingsService";
 import { requireAuth } from "../middleware/auth";
 import { prisma } from "../db/client";
 
@@ -227,16 +228,20 @@ authRouter.get("/signup-status", (_req: Request, res: Response) => {
 // before the user has logged in. Returns ONLY non-sensitive fields; the actual
 // accept still requires authentication.
 // ---------------------------------------------------------------------------
-authRouter.get("/invites/public/:token", async (req: Request, res: Response) => {
-  try {
-    const preview = await inviteService.getPublicInvite(req.params.token);
-    res.json(preview);
-  } catch (err) {
-    const code = (err as any)?.code;
-    const status = code === "EXPIRED" ? 410 : code === "NOT_FOUND" ? 404 : 500;
-    res.status(status).json({ error: (err as Error).message });
-  }
-});
+authRouter.get(
+  "/invites/public/:token",
+  async (req: Request, res: Response) => {
+    try {
+      const preview = await inviteService.getPublicInvite(req.params.token);
+      res.json(preview);
+    } catch (err) {
+      const code = (err as any)?.code;
+      const status =
+        code === "EXPIRED" ? 410 : code === "NOT_FOUND" ? 404 : 500;
+      res.status(status).json({ error: (err as Error).message });
+    }
+  },
+);
 
 // POST /api/auth/signup  { username, email, password } → { token, user, organization }
 // ---------------------------------------------------------------------------
@@ -259,7 +264,8 @@ authRouter.post("/signup", async (req: Request, res: Response) => {
       await inviteService.resolveInvite(inviteToken);
     } catch {
       return res.status(403).json({
-        error: "Signup is disabled. A valid invite is required to create an account on this instance.",
+        error:
+          "Signup is disabled. A valid invite is required to create an account on this instance.",
       });
     }
   }
@@ -299,8 +305,7 @@ authRouter.post("/signup", async (req: Request, res: Response) => {
     }
 
     const org = await organizationService.listUserOrganizations(user.id);
-    const organization =
-      org.find((o) => o.id === activeOrgId) ?? org[0];
+    const organization = org.find((o) => o.id === activeOrgId) ?? org[0];
 
     // The very first signup is a superadmin (see UserService.signup). Reflect
     // that in the JWT; otherwise fall back to "owner" for the new org they just
@@ -547,7 +552,10 @@ async function requireOrgAdmin(
   // System superadmin always passes.
   if (userRole === "superadmin" || userRole === "admin") return;
   const membership = await organizationService.getOrgMembership(userId, orgId);
-  if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
+  if (
+    !membership ||
+    (membership.role !== "owner" && membership.role !== "admin")
+  ) {
     throw Object.assign(
       new Error("Only organization owners or admins can perform this action"),
       { code: "FORBIDDEN" },
@@ -591,7 +599,11 @@ authRouter.put(
           .status(400)
           .json({ error: "role must be admin, member, or owner" });
       }
-      await organizationService.updateMemberRole(orgId, req.params.userId, role);
+      await organizationService.updateMemberRole(
+        orgId,
+        req.params.userId,
+        role,
+      );
       res.status(204).send();
     } catch (err) {
       res.status(errStatus(err)).json({ error: (err as Error).message });
@@ -637,7 +649,10 @@ authRouter.post(
         return res.status(400).json({ error: "No organization context" });
       await requireOrgAdmin(actorId, actorRole, orgId);
 
-      const { email, role } = req.body as { email?: string; role?: "admin" | "member" };
+      const { email, role } = req.body as {
+        email?: string;
+        role?: "admin" | "member";
+      };
       if (!email) return res.status(400).json({ error: "email is required" });
       const finalRole = role === "admin" ? "admin" : "member";
 
@@ -645,7 +660,13 @@ authRouter.post(
         await inviteService.createInvite(orgId, email, finalRole, actorId);
 
       // Fire-and-forget email — don't block the API response on SMTP.
-      const inviterName = (await prisma.user.findUnique({ where: { id: actorId }, select: { username: true } }))?.username ?? "Someone";
+      const inviterName =
+        (
+          await prisma.user.findUnique({
+            where: { id: actorId },
+            select: { username: true },
+          })
+        )?.username ?? "Someone";
       const orgName = invite.organizationName;
       void emailService.sendOrgInvite({
         to: invite.invitedEmail,
@@ -707,7 +728,10 @@ authRouter.get(
   async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId as string;
-      const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
       if (!user) return res.status(404).json({ error: "User not found" });
       const invites = await inviteService.listPendingForEmail(user.email);
       res.json(invites);
@@ -754,7 +778,10 @@ authRouter.post(
   async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId as string;
-      const result = await inviteService.acceptInviteById(req.params.id, userId);
+      const result = await inviteService.acceptInviteById(
+        req.params.id,
+        userId,
+      );
       res.json(result);
     } catch (err) {
       res.status(errStatus(err)).json({ error: (err as Error).message });
@@ -841,6 +868,290 @@ authRouter.put(
     }
   },
 );
+
+// ---------------------------------------------------------------------------
+// GET /api/auth/organization/ai-settings — read AI builder config
+// ---------------------------------------------------------------------------
+authRouter.get(
+  "/organization/ai-settings",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const orgId = (req as any).organizationId as string | undefined;
+      if (!orgId)
+        return res.status(400).json({ error: "No organization context" });
+      const settings = await orgSettingsService.getAiSettings(orgId);
+      return res.json(settings);
+    } catch (err) {
+      res.status(errStatus(err)).json({ error: (err as Error).message });
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// PUT /api/auth/organization/ai-settings — update AI builder config (admin+)
+// ---------------------------------------------------------------------------
+authRouter.put(
+  "/organization/ai-settings",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId as string;
+      const userRole = (req as any).userRole as string;
+      const orgId = (req as any).organizationId as string | undefined;
+      if (!orgId)
+        return res.status(400).json({ error: "No organization context" });
+      await requireOrgAdmin(userId, userRole, orgId);
+
+      const { aiBuilderEnabled, aiProvider, aiApiKey, aiModel } = req.body as {
+        aiBuilderEnabled?: boolean;
+        aiProvider?: string | null;
+        aiApiKey?: string | null;
+        aiModel?: string | null;
+      };
+      const updated = await orgSettingsService.updateAiSettings(orgId, {
+        aiBuilderEnabled,
+        aiProvider,
+        aiApiKey,
+        aiModel,
+      });
+      return res.json(updated);
+    } catch (err) {
+      res.status(errStatus(err)).json({ error: (err as Error).message });
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /api/auth/organization/ai-generate-workflow — generate workflow via LLM
+// ---------------------------------------------------------------------------
+authRouter.post(
+  "/organization/ai-generate-workflow",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const orgId = (req as any).organizationId as string | undefined;
+      if (!orgId)
+        return res.status(400).json({ error: "No organization context" });
+
+      const settings = await orgSettingsService.getAiSettings(orgId);
+      if (!settings.aiBuilderEnabled) {
+        return res
+          .status(403)
+          .json({ error: "AI Builder is not enabled for this organization" });
+      }
+      if (!settings.aiProvider || !settings.hasApiKey) {
+        return res
+          .status(400)
+          .json({ error: "AI provider and API key must be configured" });
+      }
+
+      const { prompt } = req.body as { prompt?: string };
+      if (!prompt || !prompt.trim()) {
+        return res.status(400).json({ error: "prompt is required" });
+      }
+
+      const apiKey = await orgSettingsService.getDecryptedApiKey(orgId);
+      if (!apiKey) {
+        return res.status(400).json({ error: "API key not found" });
+      }
+
+      const systemPrompt = buildWorkflowSystemPrompt();
+      const result = await callLlmForWorkflow(
+        settings.aiProvider,
+        settings.aiModel ?? "gpt-4o",
+        apiKey,
+        systemPrompt,
+        prompt.trim(),
+      );
+
+      return res.json(result);
+    } catch (err) {
+      logger.error("AI workflow generation failed", {
+        error: (err as Error).message,
+      });
+      res.status(errStatus(err)).json({ error: (err as Error).message });
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// AI Workflow Generation helpers
+// ---------------------------------------------------------------------------
+
+function buildWorkflowSystemPrompt(): string {
+  return `You are a workflow automation builder. Given a user's description of what they want to automate, generate a valid workflow template as JSON.
+
+The workflow template must follow this exact structure:
+{
+  "version": "1.0",
+  "nodes": [
+    { "id": "<unique-id>", "kind": "<NodeKind>", "label": "<display label>", "config": { ... }, "position": { "x": <number>, "y": <number> } }
+  ],
+  "edges": [
+    { "id": "<unique-id>", "source": "<node-id>", "target": "<node-id>", "sourceHandle": "source", "targetHandle": "target" }
+  ]
+}
+
+Available NodeKind values and their configs:
+
+TRIGGERS (every workflow needs exactly one):
+- "manual": Manual trigger. Config: {}
+- "webhook": HTTP webhook trigger. Config: { "path": "/my-hook", "method": "POST", "auth": { "type": "none" } }
+- "cron": Scheduled trigger. Config: { "expression": "0 9 * * *" }
+
+LOGICAL:
+- "if_else": Conditional branch. Config: { "condition": "{{data.value}} > 10" }. Has handles: "true" and "false" sourceHandles.
+- "switch": Multi-branch switch. Config: { "expression": "{{data.status}}", "cases": [{"value": "active", "label": "Active"}] }
+- "delay": Wait. Config: { "delayMs": 5000 }
+- "loop": Loop over array. Config: { "arrayExpression": "{{data.items}}" }
+- "merge": Merge branches. Config: { "mode": "wait_all" }
+- "stop": Stop execution. Config: {}
+
+UTILITIES:
+- "http_request": Make HTTP calls. Config: { "url": "https://api.example.com/data", "method": "GET", "headers": {}, "body": "" }
+- "data_mapper": Transform data. Config: { "mappings": [{ "from": "{{data.name}}", "to": "fullName" }] }
+- "json_parser": Parse JSON. Config: { "expression": "{{data.body}}" }
+- "response": Return response. Config: { "statusCode": 200, "body": "{{data.result}}" }
+
+DATA & STORAGE:
+- "postgres_query": PostgreSQL query. Config: { "credentialId": "", "query": "SELECT * FROM users" }
+- "mysql": MySQL query. Config: { "credentialId": "", "query": "SELECT 1" }
+- "mongodb": MongoDB operation. Config: { "credentialId": "", "operation": "find", "collection": "users", "query": "{}" }
+- "redis": Redis command. Config: { "credentialId": "", "command": "GET", "args": ["key"] }
+- "google_sheets": Google Sheets. Config: { "credentialId": "", "spreadsheetId": "", "operation": "read", "range": "Sheet1!A1:D10" }
+
+COMMUNICATION:
+- "send_email": Send email via SMTP. Config: { "credentialId": "", "to": "", "subject": "", "body": "" }
+- "slack": Slack message. Config: { "credentialId": "", "channel": "", "message": "" }
+
+AI:
+- "llm_prompt": LLM completion. Config: { "provider": "openai", "model": "gpt-4o", "credentialId": "", "systemPrompt": "", "userPrompt": "", "maxTokens": 1000 }
+- "ai_agent": AI agent with tools. Config: { "provider": "openai", "model": "gpt-4o", "credentialId": "", "systemPrompt": "", "userPrompt": "", "tools": [], "maxIterations": 5, "maxTokens": 2000 }
+
+CODE:
+- "js_runner": Run JavaScript. Config: { "code": "return data;" }
+
+LAYOUT RULES:
+- Place nodes left-to-right with ~250px horizontal spacing
+- Start triggers at x:100, y:200
+- For branches (if_else), offset true/false paths vertically by ±100px
+- Each node needs a unique id (use descriptive names like "trigger_1", "http_1", etc.)
+- Connect nodes with edges from source to target
+
+IMPORTANT: 
+- Return ONLY valid JSON, no markdown code fences, no explanation text
+- Every workflow MUST start with exactly one trigger node
+- Use "credentialId": "" for nodes that need credentials (user will configure these after)
+- Use template expressions like {{nodeId.data.field}} for dynamic data between nodes`;
+}
+
+async function callLlmForWorkflow(
+  provider: string,
+  model: string,
+  apiKey: string,
+  systemPrompt: string,
+  userPrompt: string,
+): Promise<{ template: object; explanation: string }> {
+  let url: string;
+  let headers: Record<string, string>;
+  let body: unknown;
+
+  switch (provider) {
+    case "openai":
+      url = "https://api.openai.com/v1/chat/completions";
+      headers = {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      };
+      body = {
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.3,
+        max_tokens: 4000,
+      };
+      break;
+    case "anthropic":
+      url = "https://api.anthropic.com/v1/messages";
+      headers = {
+        "x-api-key": apiKey,
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01",
+      };
+      body = {
+        model,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+        temperature: 0.3,
+        max_tokens: 4000,
+      };
+      break;
+    case "gemini":
+      url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      headers = { "Content-Type": "application/json" };
+      body = {
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 4000 },
+      };
+      break;
+    default:
+      throw new Error(`Unsupported AI provider: ${provider}`);
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(
+      `LLM API error (${response.status}): ${text.slice(0, 200)}`,
+    );
+  }
+
+  const json = (await response.json()) as Record<string, any>;
+  let content: string;
+
+  switch (provider) {
+    case "openai":
+      content = json.choices?.[0]?.message?.content ?? "";
+      break;
+    case "anthropic":
+      content = json.content?.[0]?.text ?? "";
+      break;
+    case "gemini":
+      content = json.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      break;
+    default:
+      content = "";
+  }
+
+  // Strip markdown code fences if present
+  content = content
+    .replace(/^```(?:json)?\s*\n?/i, "")
+    .replace(/\n?```\s*$/i, "")
+    .trim();
+
+  let template: object;
+  try {
+    template = JSON.parse(content);
+  } catch {
+    throw new Error(
+      "Failed to parse LLM response as valid JSON workflow template",
+    );
+  }
+
+  return {
+    template,
+    explanation: `Generated a workflow with ${(template as any).nodes?.length ?? 0} nodes based on your description.`,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // API Token management

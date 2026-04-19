@@ -266,6 +266,43 @@ export function updateOrganization(data: {
   });
 }
 
+// ─── AI Builder Settings ──────────────────────────────────────────────────────
+
+export interface AiSettingsPublic {
+  aiBuilderEnabled: boolean;
+  aiProvider: string | null;
+  aiModel: string | null;
+  hasApiKey: boolean;
+}
+
+export function getAiSettings(): Promise<AiSettingsPublic> {
+  return request<AiSettingsPublic>("/auth/organization/ai-settings");
+}
+
+export function updateAiSettings(data: {
+  aiBuilderEnabled?: boolean;
+  aiProvider?: string | null;
+  aiApiKey?: string | null;
+  aiModel?: string | null;
+}): Promise<AiSettingsPublic> {
+  return request<AiSettingsPublic>("/auth/organization/ai-settings", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function aiGenerateWorkflow(
+  prompt: string,
+): Promise<{ template: any; explanation: string }> {
+  return request<{ template: any; explanation: string }>(
+    "/auth/organization/ai-generate-workflow",
+    {
+      method: "POST",
+      body: JSON.stringify({ prompt }),
+    },
+  );
+}
+
 export function changePassword(
   userId: string,
   password: string,
@@ -1074,7 +1111,7 @@ export interface OrgMemberPublic {
   userId: string;
   username: string;
   email: string;
-  role: string;       // org role: "owner" | "admin" | "member"
+  role: string; // org role: "owner" | "admin" | "member"
   globalRole: string; // system role: "superadmin" | "admin" | "editor" | ...
   lastLoginAt: string | null;
   joinedAt: string;
@@ -1094,7 +1131,7 @@ export interface OrgInvitePublic {
 
 export interface CreateInviteResult {
   invite: OrgInvitePublic;
-  acceptUrl: string;     // contains the raw token — to copy/share when SMTP isn't available
+  acceptUrl: string; // contains the raw token — to copy/share when SMTP isn't available
   targetUserExists: boolean;
   rawToken: string;
 }
@@ -1169,7 +1206,9 @@ export function declineInvite(token: string): Promise<void> {
 }
 
 /** Accept by invite ID — for the in-app bell where the user never has the raw token. */
-export function acceptInviteById(inviteId: string): Promise<AcceptInviteResult> {
+export function acceptInviteById(
+  inviteId: string,
+): Promise<AcceptInviteResult> {
   return request<AcceptInviteResult>(`/auth/invites/by-id/${inviteId}/accept`, {
     method: "POST",
   });
@@ -1193,7 +1232,9 @@ export async function getSignupStatus(): Promise<{ enabled: boolean }> {
 }
 
 /** Unauthenticated — preview an invite by its raw token. For /invite/:token page. */
-export async function getPublicInvite(token: string): Promise<PublicInvitePreview> {
+export async function getPublicInvite(
+  token: string,
+): Promise<PublicInvitePreview> {
   const res = await fetch(`${API_BASE_URL}/auth/invites/public/${token}`);
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -1219,7 +1260,7 @@ export interface DashboardStats {
     timedOut: number;
     pending: number;
   };
-  successRate: number | null;      // 0..1
+  successRate: number | null; // 0..1
   avgDurationMs: number | null;
   runningNow: number;
   timeline: Array<{
@@ -1257,6 +1298,10 @@ export interface DashboardStats {
   }>;
 }
 
-export function getDashboardStats(window: DashboardWindow = "24h"): Promise<DashboardStats> {
-  return request<DashboardStats>(`${envPrefix()}/executions/stats?window=${window}`);
+export function getDashboardStats(
+  window: DashboardWindow = "24h",
+): Promise<DashboardStats> {
+  return request<DashboardStats>(
+    `${envPrefix()}/executions/stats?window=${window}`,
+  );
 }

@@ -8,6 +8,7 @@ import { PropertiesPanel } from "../components/panels/PropertiesPanel";
 import { ExecutionLog } from "../components/panels/ExecutionLog";
 import { useWorkflowStore } from "../store/workflowStore";
 import { useExecutionStore } from "../store/executionStore";
+import { AiBuilderFab } from "../components/ai/AiBuilderFab";
 import * as api from "../lib/api";
 
 export function WorkflowEditorPage(): React.ReactElement {
@@ -44,7 +45,11 @@ export function WorkflowEditorPage(): React.ReactElement {
         // Use setTimeout so the reset completes first
         setTimeout(() => {
           addNode("subflow_input", { x: 100, y: 200 });
-          addNode("subflow_output", { x: 480, y: 200 }, { outputIndex: 0, label: "output 1" });
+          addNode(
+            "subflow_output",
+            { x: 480, y: 200 },
+            { outputIndex: 0, label: "output 1" },
+          );
         }, 50);
       }
       return;
@@ -55,7 +60,14 @@ export function WorkflowEditorPage(): React.ReactElement {
     api
       .getWorkflow(id)
       .then((wf) => {
-        loadTemplate(wf.template, wf.id, wf.name, wf.status, wf.tags ?? [], wf.key);
+        loadTemplate(
+          wf.template,
+          wf.id,
+          wf.name,
+          wf.status,
+          wf.tags ?? [],
+          wf.key,
+        );
         setIsSubworkflow(!!wf.isSubworkflow);
       })
       .catch((err) => {
@@ -63,13 +75,16 @@ export function WorkflowEditorPage(): React.ReactElement {
         setError(String(err));
       })
       .finally(() => setLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // Count existing subflow_output nodes so we know the next index to add
   const subflowOutputCount = useMemo(
-    () => nodes.filter((n) => (n.data as Record<string, unknown>).kind === "subflow_output").length,
-    [nodes]
+    () =>
+      nodes.filter(
+        (n) => (n.data as Record<string, unknown>).kind === "subflow_output",
+      ).length,
+    [nodes],
   );
 
   if (loading) {
@@ -114,10 +129,14 @@ export function WorkflowEditorPage(): React.ReactElement {
           </span>
           <button
             onClick={() =>
-              addNode("subflow_output", { x: 480, y: 200 + subflowOutputCount * 120 }, {
-                outputIndex: subflowOutputCount,
-                label: `output ${subflowOutputCount + 1}`,
-              })
+              addNode(
+                "subflow_output",
+                { x: 480, y: 200 + subflowOutputCount * 120 },
+                {
+                  outputIndex: subflowOutputCount,
+                  label: `output ${subflowOutputCount + 1}`,
+                },
+              )
             }
             className="ml-auto flex items-center gap-1.5 px-2.5 py-1 text-xs rounded bg-sky-800 hover:bg-sky-700 text-sky-200 transition-colors"
           >
@@ -137,6 +156,7 @@ export function WorkflowEditorPage(): React.ReactElement {
       </div>
 
       <ExecutionLog />
+      <AiBuilderFab />
     </div>
   );
 }
