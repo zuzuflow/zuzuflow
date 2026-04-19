@@ -79,6 +79,13 @@ export function Toolbar({ onNavigateBack }: ToolbarProps): React.ReactElement {
   const [showDesignPanel, setShowDesignPanel] = useState(false);
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  /**
+   * Captures the workflow status at the moment "Run" was clicked so that
+   * "Stop" can restore it. Without this, a Run that transiently activates
+   * a draft workflow would leave the workflow active after Stop — and the
+   * webhook endpoint would keep accepting requests.
+   */
+  const preRunStatusRef = useRef<string | null>(null);
 
   useExecutionSocket(executionId);
 
@@ -188,6 +195,9 @@ export function Toolbar({ onNavigateBack }: ToolbarProps): React.ReactElement {
     }
     setIsRunning(true);
     setWebhookWaitUrl(null);
+    // Remember whether the workflow was already active before this test run —
+    // if Run flipped it active (transient), Stop will flip it back.
+    preRunStatusRef.current = workflowStatus ?? null;
     try {
       clearExecution();
 
@@ -210,12 +220,27 @@ export function Toolbar({ onNavigateBack }: ToolbarProps): React.ReactElement {
       startExecution(result.id);
       openDrawer();
 
-      // If the trigger is a webhook node, show the URL to hit
+      // If the trigger is a webhook node, show the URL to hit.
+      //
+      // Use window.location.origin + "/api" so the URL is always relative to
+      // the UI that served this page. Going through the UI origin means:
+      //   - Dev (Vite): the request is proxied to the backend — no CORS,
+      //     no hardcoded port, and the inbound route is public.
+      //   - Prod (same-origin deploy): goes straight to the server.
+      //
+      // The previous fallback hardcoded `:4000`, which broke when the
+      // backend was on a different port and produced confusing "missing
+      // token" errors (the request ended up hitting a 404/auth path on
+      // whatever was serving :4000).
       const webhookNode = template.nodes.find((n) => n.kind === "webhook");
       if (webhookNode) {
         const cfg = webhookNode.config as { path?: string };
         if (cfg.path) {
-          const base = (import.meta.env.VITE_API_URL as string | undefined) ?? `${window.location.protocol}//${window.location.hostname}:4000/api`;
+          const envBase = import.meta.env.VITE_API_URL as string | undefined;
+          const base =
+            envBase && envBase.trim().length > 0
+              ? envBase
+              : `${window.location.origin}/api`;
           setWebhookWaitUrl(`${base}/webhooks/inbound/${cfg.path}`);
         }
       }
@@ -229,8 +254,24 @@ export function Toolbar({ onNavigateBack }: ToolbarProps): React.ReactElement {
   const handleStop = async () => {
     if (!executionId) return;
     setStatus("cancelled");
+    setWebhookWaitUrl(null);
     try {
       await api.cancelExecution(executionId);
+
+      // If Run transiently activated a previously-inactive workflow,
+      // deactivate it now so the webhook endpoint stops accepting requests.
+      // Users who had an already-active workflow see no status change.
+      const priorStatus = preRunStatusRef.current;
+      preRunStatusRef.current = null;
+      if (workflowId && priorStatus && priorStatus !== "active") {
+        try {
+          await api.deactivateWorkflow(workflowId);
+          setWorkflowStatus(priorStatus);
+          setActivateState(priorStatus === "active" ? "active" : "idle");
+        } catch (deactErr) {
+          console.warn("Could not deactivate workflow after Stop:", deactErr);
+        }
+      }
     } catch (err) {
       console.error("Cancel failed:", err);
       setStatus("running");
