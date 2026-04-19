@@ -7,6 +7,8 @@ import { userService } from "../services/UserService";
 import { apiTokenService } from "../services/ApiTokenService";
 import { organizationService } from "../services/OrganizationService";
 import { mfaService } from "../services/MfaService";
+import { inviteService } from "../services/InviteService";
+import { emailService } from "../services/EmailService";
 import { requireAuth } from "../middleware/auth";
 import { prisma } from "../db/client";
 
@@ -207,6 +209,24 @@ authRouter.post("/refresh", requireAuth, (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// GET /api/auth/invites/public/:token — unauth public invite preview
+//
+// Used by the /invite/:token landing page to render "Alice invited you to Acme"
+// before the user has logged in. Returns ONLY non-sensitive fields; the actual
+// accept still requires authentication.
+// ---------------------------------------------------------------------------
+authRouter.get("/invites/public/:token", async (req: Request, res: Response) => {
+  try {
+    const preview = await inviteService.getPublicInvite(req.params.token);
+    res.json(preview);
+  } catch (err) {
+    const code = (err as any)?.code;
+    const status = code === "EXPIRED" ? 410 : code === "NOT_FOUND" ? 404 : 500;
+    res.status(status).json({ error: (err as Error).message });
+  }
+});
+
 // POST /api/auth/signup  { username, email, password } → { token, user, organization }
 // ---------------------------------------------------------------------------
 authRouter.post("/signup", async (req: Request, res: Response) => {
@@ -214,10 +234,11 @@ authRouter.post("/signup", async (req: Request, res: Response) => {
     return res.status(403).json({ error: "Signup is disabled" });
   }
 
-  const { username, email, password } = req.body as {
+  const { username, email, password, inviteToken } = req.body as {
     username?: string;
     email?: string;
     password?: string;
+    inviteToken?: string;
   };
   if (!username || !email || !password) {
     return res
@@ -231,8 +252,31 @@ authRouter.post("/signup", async (req: Request, res: Response) => {
       email,
       password,
     );
+
+    // If signup was triggered from an invite email, auto-accept it so the user
+    // lands directly inside the inviting org (and isn't stuck with only the
+    // personal org their signup created).
+    let activeOrgId = organizationId;
+    if (inviteToken) {
+      try {
+        const result = await inviteService.acceptInvite(inviteToken, user.id);
+        activeOrgId = result.organizationId;
+        logger.info("Signup auto-accepted invite", {
+          userId: user.id,
+          invitedOrgId: activeOrgId,
+        });
+      } catch (err) {
+        // Non-fatal — user account still created; they can accept manually.
+        logger.warn("Signup invite auto-accept failed", {
+          userId: user.id,
+          err: (err as Error).message,
+        });
+      }
+    }
+
     const org = await organizationService.listUserOrganizations(user.id);
-    const organization = org.find((o) => o.id === organizationId) ?? org[0];
+    const organization =
+      org.find((o) => o.id === activeOrgId) ?? org[0];
 
     // The very first signup is a superadmin (see UserService.signup). Reflect
     // that in the JWT; otherwise fall back to "owner" for the new org they just
@@ -244,7 +288,7 @@ authRouter.post("/signup", async (req: Request, res: Response) => {
         sub: user.id,
         username: user.username,
         role: effectiveRole,
-        orgId: organizationId,
+        orgId: activeOrgId,
       },
       config.JWT_SECRET,
       { expiresIn: JWT_EXPIRY },
@@ -253,7 +297,7 @@ authRouter.post("/signup", async (req: Request, res: Response) => {
     logger.info("Signup successful", {
       userId: user.id,
       username: user.username,
-      orgId: organizationId,
+      orgId: activeOrgId,
     });
     return res
       .status(201)
@@ -400,8 +444,16 @@ authRouter.post(
 // ---------------------------------------------------------------------------
 
 // GET /api/auth/users
-authRouter.get("/users", requireAuth, async (_req, res) => {
+// GET /api/auth/users — system-wide user list. Restricted to superadmin; the
+// Settings → Users tab uses /auth/organization/members instead for org scoping.
+authRouter.get("/users", requireAuth, async (req, res) => {
   try {
+    const userRole = (req as any).userRole as string;
+    if (userRole !== "superadmin") {
+      return res.status(403).json({
+        error: "Use GET /auth/organization/members for org-scoped user listing",
+      });
+    }
     res.json(await userService.listUsers());
   } catch (err) {
     res.status(errStatus(err)).json({ error: (err as Error).message });
@@ -451,6 +503,249 @@ authRouter.delete(
         id: actorId,
         role: actorRole,
       });
+      res.status(204).send();
+    } catch (err) {
+      res.status(errStatus(err)).json({ error: (err as Error).message });
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Org-scoped member list + invite flow
+// ---------------------------------------------------------------------------
+
+/** Require the caller to be owner/admin/superadmin of their current org. */
+async function requireOrgAdmin(
+  userId: string,
+  userRole: string,
+  orgId: string,
+): Promise<void> {
+  // System superadmin always passes.
+  if (userRole === "superadmin" || userRole === "admin") return;
+  const membership = await organizationService.getOrgMembership(userId, orgId);
+  if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
+    throw Object.assign(
+      new Error("Only organization owners or admins can perform this action"),
+      { code: "FORBIDDEN" },
+    );
+  }
+}
+
+// GET /api/auth/organization/members — list current org's members
+authRouter.get(
+  "/organization/members",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const orgId = (req as any).organizationId as string | undefined;
+      if (!orgId)
+        return res.status(400).json({ error: "No organization context" });
+      const members = await organizationService.listOrgMembers(orgId);
+      res.json(members);
+    } catch (err) {
+      res.status(errStatus(err)).json({ error: (err as Error).message });
+    }
+  },
+);
+
+// PUT /api/auth/organization/members/:userId/role  { role }
+authRouter.put(
+  "/organization/members/:userId/role",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const actorId = (req as any).userId as string;
+      const actorRole = (req as any).userRole as string;
+      const orgId = (req as any).organizationId as string | undefined;
+      if (!orgId)
+        return res.status(400).json({ error: "No organization context" });
+      await requireOrgAdmin(actorId, actorRole, orgId);
+
+      const { role } = req.body as { role?: "admin" | "member" | "owner" };
+      if (role !== "admin" && role !== "member" && role !== "owner") {
+        return res
+          .status(400)
+          .json({ error: "role must be admin, member, or owner" });
+      }
+      await organizationService.updateMemberRole(orgId, req.params.userId, role);
+      res.status(204).send();
+    } catch (err) {
+      res.status(errStatus(err)).json({ error: (err as Error).message });
+    }
+  },
+);
+
+// DELETE /api/auth/organization/members/:userId — remove a member
+authRouter.delete(
+  "/organization/members/:userId",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const actorId = (req as any).userId as string;
+      const actorRole = (req as any).userRole as string;
+      const orgId = (req as any).organizationId as string | undefined;
+      if (!orgId)
+        return res.status(400).json({ error: "No organization context" });
+      await requireOrgAdmin(actorId, actorRole, orgId);
+      if (req.params.userId === actorId) {
+        return res
+          .status(400)
+          .json({ error: "You cannot remove yourself from the organization" });
+      }
+      await organizationService.removeMemberFromOrg(orgId, req.params.userId);
+      res.status(204).send();
+    } catch (err) {
+      res.status(errStatus(err)).json({ error: (err as Error).message });
+    }
+  },
+);
+
+// POST /api/auth/organization/invites  { email, role }
+authRouter.post(
+  "/organization/invites",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const actorId = (req as any).userId as string;
+      const actorRole = (req as any).userRole as string;
+      const orgId = (req as any).organizationId as string | undefined;
+      if (!orgId)
+        return res.status(400).json({ error: "No organization context" });
+      await requireOrgAdmin(actorId, actorRole, orgId);
+
+      const { email, role } = req.body as { email?: string; role?: "admin" | "member" };
+      if (!email) return res.status(400).json({ error: "email is required" });
+      const finalRole = role === "admin" ? "admin" : "member";
+
+      const { invite, rawToken, acceptUrl, targetUserExists } =
+        await inviteService.createInvite(orgId, email, finalRole, actorId);
+
+      // Fire-and-forget email — don't block the API response on SMTP.
+      const inviterName = (await prisma.user.findUnique({ where: { id: actorId }, select: { username: true } }))?.username ?? "Someone";
+      const orgName = invite.organizationName;
+      void emailService.sendOrgInvite({
+        to: invite.invitedEmail,
+        orgName,
+        inviterName,
+        acceptUrl,
+        role: finalRole,
+        isExistingUser: targetUserExists,
+      });
+
+      res.status(201).json({ invite, acceptUrl, targetUserExists, rawToken });
+    } catch (err) {
+      res.status(errStatus(err)).json({ error: (err as Error).message });
+    }
+  },
+);
+
+// GET /api/auth/organization/invites — pending invites for the current org
+authRouter.get(
+  "/organization/invites",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const orgId = (req as any).organizationId as string | undefined;
+      if (!orgId)
+        return res.status(400).json({ error: "No organization context" });
+      const invites = await inviteService.listPendingForOrg(orgId);
+      res.json(invites);
+    } catch (err) {
+      res.status(errStatus(err)).json({ error: (err as Error).message });
+    }
+  },
+);
+
+// DELETE /api/auth/organization/invites/:id — revoke a pending invite
+authRouter.delete(
+  "/organization/invites/:id",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const actorId = (req as any).userId as string;
+      const actorRole = (req as any).userRole as string;
+      const orgId = (req as any).organizationId as string | undefined;
+      if (!orgId)
+        return res.status(400).json({ error: "No organization context" });
+      await requireOrgAdmin(actorId, actorRole, orgId);
+      await inviteService.revokeInvite(req.params.id, [orgId]);
+      res.status(204).send();
+    } catch (err) {
+      res.status(errStatus(err)).json({ error: (err as Error).message });
+    }
+  },
+);
+
+// GET /api/auth/invites/mine — pending invites addressed to the logged-in user
+authRouter.get(
+  "/invites/mine",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId as string;
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+      if (!user) return res.status(404).json({ error: "User not found" });
+      const invites = await inviteService.listPendingForEmail(user.email);
+      res.json(invites);
+    } catch (err) {
+      res.status(errStatus(err)).json({ error: (err as Error).message });
+    }
+  },
+);
+
+// POST /api/auth/invites/:token/accept
+authRouter.post(
+  "/invites/:token/accept",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId as string;
+      const result = await inviteService.acceptInvite(req.params.token, userId);
+      res.json(result);
+    } catch (err) {
+      res.status(errStatus(err)).json({ error: (err as Error).message });
+    }
+  },
+);
+
+// POST /api/auth/invites/:token/decline
+authRouter.post(
+  "/invites/:token/decline",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId as string;
+      await inviteService.declineInvite(req.params.token, userId);
+      res.status(204).send();
+    } catch (err) {
+      res.status(errStatus(err)).json({ error: (err as Error).message });
+    }
+  },
+);
+
+// POST /api/auth/invites/by-id/:id/accept — in-app accept (no raw token required)
+authRouter.post(
+  "/invites/by-id/:id/accept",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId as string;
+      const result = await inviteService.acceptInviteById(req.params.id, userId);
+      res.json(result);
+    } catch (err) {
+      res.status(errStatus(err)).json({ error: (err as Error).message });
+    }
+  },
+);
+
+// POST /api/auth/invites/by-id/:id/decline
+authRouter.post(
+  "/invites/by-id/:id/decline",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId as string;
+      await inviteService.declineInviteById(req.params.id, userId);
       res.status(204).send();
     } catch (err) {
       res.status(errStatus(err)).json({ error: (err as Error).message });

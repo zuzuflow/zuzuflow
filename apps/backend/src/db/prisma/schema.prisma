@@ -64,6 +64,7 @@ model Organization {
   members      OrgMember[]
   environments Environment[]
   orgPlan      OrgPlan?
+  invites      OrgInvite[]
 
   @@map("organizations")
 }
@@ -86,6 +87,33 @@ model OrgMember {
   @@index([userId])
   @@index([organizationId])
   @@map("org_members")
+}
+
+// -----------------------------------------------------------------------------
+// OrgInvite — pending invites for users to join an organization.
+//
+// Raw invite token is generated with crypto.randomBytes(32).toString("hex") and
+// included once in the invite email. Only the sha256 hash is stored here, so
+// even DB compromise doesn't leak usable invite URLs.
+// -----------------------------------------------------------------------------
+
+model OrgInvite {
+  id              String   @id @default(uuid())
+  organizationId  String
+  invitedEmail    String                                // lowercased at write time
+  role            String   @default("member")           // "admin" | "member"
+  invitedByUserId String
+  inviteTokenHash String   @unique                      // sha256 of raw token
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User         @relation("OrgInvitesSent", fields: [invitedByUserId], references: [id])
+
+  @@unique([organizationId, invitedEmail])
+  @@index([invitedEmail])
+  @@index([organizationId])
+  @@map("org_invites")
 }
 
 // -----------------------------------------------------------------------------
@@ -276,10 +304,11 @@ model User {
   mfaEmailEnabled   Boolean  @default(false)
   mfaBackupCodes    String[] @default([])   // hashed backup codes
 
-  apiTokens    ApiToken[]
-  environments UserEnvironment[]
-  orgMembers   OrgMember[]
-  mfaChallenges MfaChallenge[]
+  apiTokens      ApiToken[]
+  environments   UserEnvironment[]
+  orgMembers     OrgMember[]
+  mfaChallenges  MfaChallenge[]
+  orgInvitesSent OrgInvite[]       @relation("OrgInvitesSent")
 
   @@map("users")
 }

@@ -33,6 +33,8 @@ import type {
   GitProvider,
   GitStatus,
   UserPublic,
+  OrgMemberPublic,
+  OrgInvitePublic,
   ApiTokenPublic,
   ApiTokenCreated,
   EnvironmentItem,
@@ -51,6 +53,12 @@ import {
   createUser,
   changePassword,
   deleteUser,
+  listOrgMembers,
+  listOrgInvites,
+  createOrgInvite,
+  revokeOrgInvite,
+  updateOrgMemberRole,
+  removeOrgMember,
   listApiTokens,
   createApiToken,
   revokeApiToken,
@@ -76,6 +84,7 @@ import { useEnvironmentStore } from "../store/environmentStore";
 import { cn } from "../lib/utils";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { InviteUserDialog } from "@/components/InviteUserDialog";
 import { PageHeader } from "../components/layout/PageHeader";
 import {
   Tabs,
@@ -579,40 +588,41 @@ function GitTab() {
 // ─── Users tab ────────────────────────────────────────────────────────────────
 
 function UsersTab() {
-  const [users, setUsers] = useState<UserPublic[]>([]);
+  const [members, setMembers] = useState<OrgMemberPublic[]>([]);
+  const [invites, setInvites] = useState<OrgInvitePublic[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Create form
-  const [newUsername, setNewUsername] = useState("");
-  const [newEmail, setNewEmail] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [newRole, setNewRole] = useState<"admin" | "editor">("editor");
-  const [showNewPass, setShowNewPass] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState("");
+  // Invite dialog
+  const [inviteOpen, setInviteOpen] = useState(false);
 
-  // Change password modal
-  const [changePwUser, setChangePwUser] = useState<UserPublic | null>(null);
+  // Change password modal (still targets /auth/users/:id/password — works for
+  // the current user and, for admins, for any user they can reach)
+  const [changePwUser, setChangePwUser] = useState<OrgMemberPublic | null>(null);
   const [newPw, setNewPw] = useState("");
   const [showNewPw, setShowNewPw] = useState(false);
   const [changingPw, setChangingPw] = useState(false);
   const [changePwError, setChangePwError] = useState("");
 
   // Reset MFA dialog
-  const [mfaResetTarget, setMfaResetTarget] = useState<UserPublic | null>(null);
+  const [mfaResetTarget, setMfaResetTarget] = useState<OrgMemberPublic | null>(null);
   const [resettingMfa, setResettingMfa] = useState(false);
 
-  // Delete user dialog
-  const [deleteTarget, setDeleteTarget] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
+  // Remove member dialog
+  const [removeTarget, setRemoveTarget] = useState<OrgMemberPublic | null>(null);
+
+  // Revoke invite dialog
+  const [revokeTarget, setRevokeTarget] = useState<OrgInvitePublic | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setUsers(await listUsers());
+      const [m, inv] = await Promise.all([
+        listOrgMembers(),
+        listOrgInvites().catch(() => [] as OrgInvitePublic[]),
+      ]);
+      setMembers(m);
+      setInvites(inv);
       setError("");
     } catch (err) {
       setError((err as Error).message);
@@ -625,44 +635,47 @@ function UsersTab() {
     load();
   }, [load]);
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newUsername.trim() || !newEmail.trim() || !newPassword.trim()) {
-      setCreateError("Username, email, and password are required");
-      return;
-    }
-    setCreating(true);
-    setCreateError("");
+  async function handleChangeRole(
+    member: OrgMemberPublic,
+    role: "owner" | "admin" | "member",
+  ) {
+    if (role === member.role) return;
+    // Optimistic update
+    setMembers((prev) =>
+      prev.map((m) => (m.userId === member.userId ? { ...m, role } : m)),
+    );
     try {
-      await createUser(
-        newUsername.trim(),
-        newEmail.trim(),
-        newPassword.trim(),
-        newRole,
-      );
-      setNewUsername("");
-      setNewEmail("");
-      setNewPassword("");
-      setNewRole("editor");
-      await load();
+      await updateOrgMemberRole(member.userId, role);
     } catch (err) {
-      setCreateError((err as Error).message);
-    } finally {
-      setCreating(false);
+      // Roll back
+      setMembers((prev) =>
+        prev.map((m) => (m.userId === member.userId ? { ...m, role: member.role } : m)),
+      );
+      toast.error((err as Error).message);
     }
   }
 
-  function handleDelete(user: UserPublic) {
-    setDeleteTarget({ id: user.id, name: user.username });
+  async function handleConfirmRemove() {
+    if (!removeTarget) return;
+    const target = removeTarget;
+    setRemoveTarget(null);
+    try {
+      await removeOrgMember(target.userId);
+      await load();
+      toast.success(`${target.username} removed from this organization`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
   }
 
-  async function handleConfirmDelete() {
-    if (!deleteTarget) return;
-    const target = deleteTarget;
-    setDeleteTarget(null);
+  async function handleConfirmRevoke() {
+    if (!revokeTarget) return;
+    const target = revokeTarget;
+    setRevokeTarget(null);
     try {
-      await deleteUser(target.id);
+      await revokeOrgInvite(target.id);
       await load();
+      toast.success(`Invite to ${target.invitedEmail} revoked`);
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -674,9 +687,10 @@ function UsersTab() {
     setChangingPw(true);
     setChangePwError("");
     try {
-      await changePassword(changePwUser.id, newPw.trim());
+      await changePassword(changePwUser.userId, newPw.trim());
       setChangePwUser(null);
       setNewPw("");
+      toast.success("Password updated");
     } catch (err) {
       setChangePwError((err as Error).message);
     } finally {
@@ -688,7 +702,7 @@ function UsersTab() {
     if (!mfaResetTarget) return;
     setResettingMfa(true);
     try {
-      await adminResetMfa(mfaResetTarget.id);
+      await adminResetMfa(mfaResetTarget.userId);
       toast.success(`MFA cleared for ${mfaResetTarget.username}`);
       setMfaResetTarget(null);
     } catch (err) {
@@ -703,15 +717,23 @@ function UsersTab() {
 
   return (
     <div className="space-y-6">
-      {/* User list */}
+      {/* Members */}
       <div>
-        <div className="flex items-center gap-2 mb-1">
-          <Users size={14} className="text-muted-foreground" />
-          <h2 className="text-sm font-semibold text-foreground">Users</h2>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <Users size={14} className="text-muted-foreground" />
+            <h2 className="text-sm font-semibold text-foreground">Members</h2>
+          </div>
+          <button
+            onClick={() => setInviteOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
+          >
+            <Plus size={12} /> Invite user
+          </button>
         </div>
         <p className="text-xs text-muted-foreground mb-4">
-          Manage who can access this application. Each user has a role: admin or
-          editor.
+          People who can access this organization. Each member has a role:
+          owner, admin, or member.
         </p>
 
         <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -721,9 +743,9 @@ function UsersTab() {
             </div>
           ) : error ? (
             <div className="px-5 py-4 text-xs text-red-400">{error}</div>
-          ) : users.length === 0 ? (
+          ) : members.length === 0 ? (
             <div className="px-5 py-4 text-xs text-muted-foreground">
-              No users found.
+              No members yet. Click "Invite user" to get started.
             </div>
           ) : (
             <Table>
@@ -733,46 +755,53 @@ function UsersTab() {
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Last Login</TableHead>
-                  <TableHead>Last IP</TableHead>
-                  <TableHead>Created</TableHead>
+                  <TableHead>Joined</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((u) => (
-                  <TableRow key={u.id}>
+                {members.map((m) => (
+                  <TableRow key={m.id}>
                     <TableCell className="font-medium text-foreground">
-                      {u.username}
+                      {m.username}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">
-                      {u.email || "—"}
+                      {m.email || "—"}
                     </TableCell>
                     <TableCell>
-                      <span
+                      <select
+                        value={m.role}
+                        onChange={(e) =>
+                          handleChangeRole(
+                            m,
+                            e.target.value as "owner" | "admin" | "member",
+                          )
+                        }
                         className={cn(
-                          "px-2 py-0.5 rounded text-[10px] font-medium",
-                          u.role === "admin"
-                            ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30"
-                            : "bg-muted text-muted-foreground border border-border",
+                          "px-2 py-0.5 rounded text-[10px] font-medium border cursor-pointer focus:outline-none focus:border-indigo-500",
+                          m.role === "owner"
+                            ? "bg-amber-900/30 text-amber-200 border-amber-700/50"
+                            : m.role === "admin"
+                              ? "bg-indigo-600/20 text-indigo-300 border-indigo-500/30"
+                              : "bg-muted text-muted-foreground border-border",
                         )}
                       >
-                        {u.role}
-                      </span>
+                        <option value="owner">owner</option>
+                        <option value="admin">admin</option>
+                        <option value="member">member</option>
+                      </select>
                     </TableCell>
                     <TableCell className="text-muted-foreground font-mono text-xs">
-                      {u.lastLoginAt ? fmtDate(u.lastLoginAt) : "Never"}
+                      {m.lastLoginAt ? fmtDate(m.lastLoginAt) : "Never"}
                     </TableCell>
                     <TableCell className="text-muted-foreground font-mono text-xs">
-                      {u.lastLoginIp || "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground font-mono">
-                      {fmtDate(u.createdAt)}
+                      {fmtDate(m.joinedAt)}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => {
-                            setChangePwUser(u);
+                            setChangePwUser(m);
                             setNewPw("");
                             setChangePwError("");
                           }}
@@ -781,16 +810,16 @@ function UsersTab() {
                           Change password
                         </button>
                         <button
-                          onClick={() => setMfaResetTarget(u)}
+                          onClick={() => setMfaResetTarget(m)}
                           className="text-muted-foreground hover:text-amber-400 transition-colors"
                           title="Reset MFA"
                         >
                           <ShieldOff size={12} />
                         </button>
                         <button
-                          onClick={() => handleDelete(u)}
+                          onClick={() => setRemoveTarget(m)}
                           className="text-muted-foreground hover:text-red-400 transition-colors"
-                          title="Delete user"
+                          title="Remove from organization"
                         >
                           <Trash2 size={12} />
                         </button>
@@ -804,88 +833,77 @@ function UsersTab() {
         </div>
       </div>
 
-      {/* Create user form */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <Plus size={14} className="text-muted-foreground" />
-          <h3 className="text-sm font-semibold text-foreground">Add User</h3>
-        </div>
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
-          <form onSubmit={handleCreate} className="px-5 py-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelClass}>Username</label>
-                <input
-                  className={inputClass}
-                  type="text"
-                  placeholder="username"
-                  value={newUsername}
-                  onChange={(e) => setNewUsername(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Role</label>
-                <select
-                  className={inputClass + " cursor-pointer"}
-                  value={newRole}
-                  onChange={(e) =>
-                    setNewRole(e.target.value as "admin" | "editor")
-                  }
-                >
-                  <option value="editor">Editor</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className={labelClass}>Email</label>
-              <input
-                className={inputClass}
-                type="email"
-                placeholder="user@example.com"
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Password</label>
-              <div className="relative">
-                <input
-                  className={inputClass + " pr-9"}
-                  type={showNewPass ? "text" : "password"}
-                  placeholder="Min. 8 characters"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPass((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showNewPass ? <EyeOff size={13} /> : <Eye size={13} />}
-                </button>
-              </div>
-            </div>
-            {createError && (
-              <p className="text-xs text-red-400">{createError}</p>
-            )}
-          </form>
-          <div className="px-5 py-3 border-t border-border">
-            <button
-              onClick={handleCreate as any}
-              disabled={creating}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded bg-indigo-600 hover:bg-indigo-500 text-white transition-colors disabled:opacity-60"
-            >
-              {creating ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : (
-                <Plus size={12} />
-              )}
-              {creating ? "Creating…" : "Create User"}
-            </button>
+      {/* Pending invites */}
+      {invites.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Mail size={14} className="text-muted-foreground" />
+            <h3 className="text-sm font-semibold text-foreground">
+              Pending invites
+            </h3>
+          </div>
+          <p className="text-xs text-muted-foreground mb-4">
+            These invites haven't been accepted yet. Revoke any that shouldn't
+            go through.
+          </p>
+          <div className="bg-card border border-border rounded-xl overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Invited by</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invites.map((inv) => (
+                  <TableRow key={inv.id}>
+                    <TableCell className="font-medium text-foreground text-xs">
+                      {inv.invitedEmail}
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={cn(
+                          "px-2 py-0.5 rounded text-[10px] font-medium",
+                          inv.role === "admin"
+                            ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30"
+                            : "bg-muted text-muted-foreground border border-border",
+                        )}
+                      >
+                        {inv.role}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs">
+                      {inv.invitedByName ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-xs">
+                      {fmtDate(inv.expiresAt)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <button
+                        onClick={() => setRevokeTarget(inv)}
+                        className="text-muted-foreground hover:text-red-400 transition-colors"
+                        title="Revoke invite"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Invite dialog */}
+      <InviteUserDialog
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        onInvited={load}
+      />
 
       {/* Change password modal */}
       <Dialog
@@ -953,14 +971,26 @@ function UsersTab() {
       </Dialog>
 
       <ConfirmDialog
-        open={deleteTarget !== null}
+        open={removeTarget !== null}
         onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null);
+          if (!open) setRemoveTarget(null);
         }}
-        title="Delete User"
-        description={`Delete user "${deleteTarget?.name}"? This cannot be undone.`}
-        confirmLabel="Delete"
-        onConfirm={handleConfirmDelete}
+        title="Remove from organization"
+        description={`Remove "${removeTarget?.username}" from this organization? Their account still exists and they keep access to any other orgs they're members of.`}
+        confirmLabel="Remove"
+        onConfirm={handleConfirmRemove}
+        destructive
+      />
+
+      <ConfirmDialog
+        open={revokeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRevokeTarget(null);
+        }}
+        title="Revoke invite"
+        description={`Revoke the pending invite for "${revokeTarget?.invitedEmail}"? They won't be able to accept unless you invite them again.`}
+        confirmLabel="Revoke"
+        onConfirm={handleConfirmRevoke}
         destructive
       />
 

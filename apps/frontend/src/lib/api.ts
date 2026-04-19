@@ -191,11 +191,14 @@ export async function signup(
   username: string,
   email: string,
   password: string,
+  /** Optional: raw invite token from an email link. If present, the new user
+   *  is auto-added to the inviting org. */
+  inviteToken?: string,
 ): Promise<LoginResult> {
   const res = await fetch(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ orgName, username, email, password }),
+    body: JSON.stringify({ orgName, username, email, password, inviteToken }),
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -1062,4 +1065,128 @@ export function updateVariable(
 
 export function deleteVariable(id: string): Promise<void> {
   return request<void>(`${envPrefix()}/variables/${id}`, { method: "DELETE" });
+}
+
+// ─── Org members & invites ────────────────────────────────────────────────────
+
+export interface OrgMemberPublic {
+  id: string;
+  userId: string;
+  username: string;
+  email: string;
+  role: string;       // org role: "owner" | "admin" | "member"
+  globalRole: string; // system role: "superadmin" | "admin" | "editor" | ...
+  lastLoginAt: string | null;
+  joinedAt: string;
+}
+
+export interface OrgInvitePublic {
+  id: string;
+  organizationId: string;
+  organizationName: string;
+  invitedEmail: string;
+  role: string;
+  invitedByUserId: string;
+  invitedByName?: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface CreateInviteResult {
+  invite: OrgInvitePublic;
+  acceptUrl: string;     // contains the raw token — to copy/share when SMTP isn't available
+  targetUserExists: boolean;
+  rawToken: string;
+}
+
+export interface PublicInvitePreview {
+  organizationName: string;
+  invitedEmail: string;
+  role: string;
+  inviterName: string;
+  expiresAt: string;
+  userExists: boolean;
+}
+
+export interface AcceptInviteResult {
+  organizationId: string;
+  organizationName: string;
+  role: string;
+}
+
+export function listOrgMembers(): Promise<OrgMemberPublic[]> {
+  return request<OrgMemberPublic[]>("/auth/organization/members");
+}
+
+export function updateOrgMemberRole(
+  userId: string,
+  role: "owner" | "admin" | "member",
+): Promise<void> {
+  return request<void>(`/auth/organization/members/${userId}/role`, {
+    method: "PUT",
+    body: JSON.stringify({ role }),
+  });
+}
+
+export function removeOrgMember(userId: string): Promise<void> {
+  return request<void>(`/auth/organization/members/${userId}`, {
+    method: "DELETE",
+  });
+}
+
+export function listOrgInvites(): Promise<OrgInvitePublic[]> {
+  return request<OrgInvitePublic[]>("/auth/organization/invites");
+}
+
+export function createOrgInvite(
+  email: string,
+  role: "admin" | "member",
+): Promise<CreateInviteResult> {
+  return request<CreateInviteResult>("/auth/organization/invites", {
+    method: "POST",
+    body: JSON.stringify({ email, role }),
+  });
+}
+
+export function revokeOrgInvite(inviteId: string): Promise<void> {
+  return request<void>(`/auth/organization/invites/${inviteId}`, {
+    method: "DELETE",
+  });
+}
+
+export function listMyInvites(): Promise<OrgInvitePublic[]> {
+  return request<OrgInvitePublic[]>("/auth/invites/mine");
+}
+
+export function acceptInvite(token: string): Promise<AcceptInviteResult> {
+  return request<AcceptInviteResult>(`/auth/invites/${token}/accept`, {
+    method: "POST",
+  });
+}
+
+export function declineInvite(token: string): Promise<void> {
+  return request<void>(`/auth/invites/${token}/decline`, { method: "POST" });
+}
+
+/** Accept by invite ID — for the in-app bell where the user never has the raw token. */
+export function acceptInviteById(inviteId: string): Promise<AcceptInviteResult> {
+  return request<AcceptInviteResult>(`/auth/invites/by-id/${inviteId}/accept`, {
+    method: "POST",
+  });
+}
+
+export function declineInviteById(inviteId: string): Promise<void> {
+  return request<void>(`/auth/invites/by-id/${inviteId}/decline`, {
+    method: "POST",
+  });
+}
+
+/** Unauthenticated — preview an invite by its raw token. For /invite/:token page. */
+export async function getPublicInvite(token: string): Promise<PublicInvitePreview> {
+  const res = await fetch(`${API_BASE_URL}/auth/invites/public/${token}`);
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "Invite not found");
+  }
+  return res.json() as Promise<PublicInvitePreview>;
 }

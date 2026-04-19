@@ -66,6 +66,71 @@ export class EmailService {
       );
     }
   }
+
+  /**
+   * Send an invite email inviting {to} to join {orgName}. Does not throw on
+   * delivery failure — invite creation should still succeed so the inviter can
+   * copy the accept URL manually. Logs the URL to the console when SMTP isn't
+   * configured (dev mode).
+   */
+  async sendOrgInvite(params: {
+    to: string;
+    orgName: string;
+    inviterName: string;
+    acceptUrl: string;
+    role: string;
+    isExistingUser: boolean;
+  }): Promise<void> {
+    const { to, orgName, inviterName, acceptUrl, role, isExistingUser } = params;
+    const from = config.SMTP_FROM || "noreply@zuzuflow.app";
+    const subject = `You've been invited to join ${orgName} on ZuzuFlow`;
+    const ctaLabel = isExistingUser ? "Accept invite" : "Sign up and join";
+    const actionHint = isExistingUser
+      ? "Sign in with this email address to accept the invite."
+      : "You don't have a ZuzuFlow account yet — clicking the button creates one tied to your invite.";
+
+    const html = `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; color: #111827;">
+        <h2 style="color: #4f46e5;">ZuzuFlow — Organization Invite</h2>
+        <p><strong>${inviterName}</strong> invited you to join <strong>${orgName}</strong> as a <strong>${role}</strong>.</p>
+        <div style="margin: 28px 0; text-align: center;">
+          <a href="${acceptUrl}"
+             style="display: inline-block; padding: 12px 24px; background: #4f46e5; color: white;
+                    text-decoration: none; border-radius: 8px; font-weight: 600;">
+            ${ctaLabel}
+          </a>
+        </div>
+        <p style="color: #6b7280; font-size: 13px;">${actionHint}</p>
+        <p style="color: #6b7280; font-size: 13px; word-break: break-all;">
+          Or open this link: <br/>
+          <a href="${acceptUrl}">${acceptUrl}</a>
+        </p>
+        <p style="color: #9ca3af; font-size: 12px; margin-top: 32px;">
+          This invite expires in 7 days. If you didn't expect this, you can ignore this email.
+        </p>
+      </div>
+    `;
+    const text =
+      `${inviterName} invited you to join ${orgName} on ZuzuFlow as a ${role}.\n\n` +
+      `Accept: ${acceptUrl}\n\n` +
+      `This invite expires in 7 days. If you didn't expect this, ignore this email.`;
+
+    if (!this.transporter) {
+      logger.info(`[EmailService DEV] Invite for ${to} (${orgName} as ${role}): ${acceptUrl}`);
+      return;
+    }
+
+    try {
+      await this.transporter.sendMail({ from, to, subject, html, text });
+      logger.info("Invite email sent", { to, orgName });
+    } catch (err) {
+      // Don't throw — invite row is already persisted, admin can copy URL
+      logger.error("Failed to send invite email (invite still active)", {
+        to,
+        error: (err as Error).message,
+      });
+    }
+  }
 }
 
 export const emailService = new EmailService();

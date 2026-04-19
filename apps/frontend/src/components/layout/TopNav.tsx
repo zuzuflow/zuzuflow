@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { ChevronDown, Check } from "lucide-react";
 import { useEnvironmentStore } from "@/store/environmentStore";
 import { cn } from "@/lib/utils";
+import { InviteBell } from "./InviteBell";
 
 // ─── Color mapping for environment badges ────────────────────────────────────
 
@@ -47,9 +48,14 @@ export function TopNav() {
     /* `relative z-40` creates a stacking context so the env-switcher dropdown
        (z-50 inside here) paints above <main>, which is a later sibling and
        would otherwise overlap it at the default stacking order. */
-    <div className="relative z-40 h-10 border-b border-border bg-card/50 backdrop-blur-sm flex items-center px-4 shrink-0">
+    <div className="relative z-40 h-10 border-b border-border bg-card/50 backdrop-blur-sm flex items-center px-4 shrink-0 gap-2">
+      {/* Pending-invite bell — only meaningful for authed users */}
+      <div className="ml-auto">
+        <InviteBell />
+      </div>
+
       {/* Environment switcher — AWS-style role badge */}
-      <div ref={ref} className="relative ml-auto">
+      <div ref={ref} className="relative">
         <button
           onClick={() => setOpen(!open)}
           className={cn(

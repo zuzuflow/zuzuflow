@@ -11,6 +11,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
 import { OrgPickerPage } from "./pages/OrgPickerPage";
 import { MfaEnrollmentPage } from "./pages/MfaEnrollmentPage";
+import { InviteAcceptPage } from "./pages/InviteAcceptPage";
 
 function AuthGuard({
   children,
@@ -29,6 +30,7 @@ export default function App(): React.ReactElement {
         {/* Public */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/invite/:token" element={<InviteAcceptPage />} />
         <Route
           path="/mfa-setup"
           element={

@@ -17,6 +17,11 @@ const envSchema = z.object({
     .default("http://localhost:3000")
     .transform((s) => s.split(",").map((o) => o.trim())),
 
+  // Public-facing frontend URL — used to build links in outgoing emails
+  // (invite accept URL, password reset, etc.). Falls back to the first CORS
+  // origin if not explicitly set.
+  APP_URL: z.string().optional(),
+
   // Database
   DATABASE_URL: z.string().url(),
 

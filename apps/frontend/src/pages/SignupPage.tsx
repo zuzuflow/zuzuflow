@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff, Loader2, UserPlus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Logo } from "@/components/branding/Logo";
@@ -11,15 +11,31 @@ import { spring } from "@/lib/motion";
 
 export function SignupPage(): React.ReactElement {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // If this signup flow was triggered from an invite email, the raw token
+  // (and pre-filled email) are in the query string. We pass the token to the
+  // backend so signup auto-joins the inviting org instead of creating a fresh
+  // personal one.
+  const inviteToken = searchParams.get("invite") || undefined;
+  const prefilledEmail = searchParams.get("email") || "";
+
   const [orgName, setOrgName] = useState("");
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(prefilledEmail);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // When an invite is in play the user doesn't need to name a new org — they
+  // join the inviting one. Seed a throwaway org name; backend will still create
+  // a personal org alongside (harmless) and auto-switch to the invited one.
+  useEffect(() => {
+    if (inviteToken && !orgName) setOrgName("My Workspace");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inviteToken]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +51,13 @@ export function SignupPage(): React.ReactElement {
 
     setLoading(true);
     try {
-      await signup(orgName.trim(), username.trim(), email.trim(), password.trim());
+      await signup(
+        orgName.trim(),
+        username.trim(),
+        email.trim(),
+        password.trim(),
+        inviteToken,
+      );
       navigate("/", { replace: true });
     } catch (err) {
       setError((err as Error).message || "Signup failed");

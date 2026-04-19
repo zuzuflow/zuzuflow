@@ -201,6 +201,132 @@ export class OrganizationService {
     const suffix = Math.random().toString(36).substring(2, 6);
     return `${base}-${suffix}`;
   }
+
+  // ---------------------------------------------------------------------------
+  // Members
+  // ---------------------------------------------------------------------------
+
+  /** List all members of an org with their user details and membership role. */
+  async listOrgMembers(organizationId: string): Promise<
+    Array<{
+      id: string;
+      userId: string;
+      username: string;
+      email: string;
+      role: string; // org role
+      globalRole: string;
+      lastLoginAt: string | null;
+      joinedAt: string;
+    }>
+  > {
+    const members = await prisma.orgMember.findMany({
+      where: { organizationId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            role: true,
+            lastLoginAt: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    return members.map((m: any) => ({
+      id: m.id,
+      userId: m.userId,
+      username: m.user.username,
+      email: m.user.email,
+      role: m.role,
+      globalRole: m.user.role,
+      lastLoginAt: m.user.lastLoginAt ? m.user.lastLoginAt.toISOString() : null,
+      joinedAt: m.createdAt.toISOString(),
+    }));
+  }
+
+  /** Idempotent — creates an OrgMember row if not already present. */
+  async addMemberToOrg(
+    organizationId: string,
+    userId: string,
+    role: "admin" | "member" | "owner" = "member",
+  ): Promise<void> {
+    await prisma.orgMember.upsert({
+      where: { userId_organizationId: { userId, organizationId } },
+      create: { userId, organizationId, role },
+      update: {}, // do not overwrite existing role
+    });
+    logger.info("User added to org", { userId, organizationId, role });
+  }
+
+  /**
+   * Remove a user from an org.
+   * Guard: refuses to remove the last owner (would leave the org ungovernable).
+   */
+  async removeMemberFromOrg(
+    organizationId: string,
+    userId: string,
+  ): Promise<void> {
+    const target = await prisma.orgMember.findUnique({
+      where: { userId_organizationId: { userId, organizationId } },
+    });
+    if (!target) return; // idempotent
+
+    if (target.role === "owner") {
+      const ownerCount = await prisma.orgMember.count({
+        where: { organizationId, role: "owner" },
+      });
+      if (ownerCount <= 1) {
+        throw Object.assign(
+          new Error("Cannot remove the last owner of the organization"),
+          { code: "VALIDATION_ERROR" },
+        );
+      }
+    }
+
+    await prisma.orgMember.delete({ where: { id: target.id } });
+    logger.info("User removed from org", { userId, organizationId });
+  }
+
+  /** Update a member's role within an org. */
+  async updateMemberRole(
+    organizationId: string,
+    userId: string,
+    newRole: "admin" | "member" | "owner",
+  ): Promise<void> {
+    const target = await prisma.orgMember.findUnique({
+      where: { userId_organizationId: { userId, organizationId } },
+    });
+    if (!target) {
+      throw Object.assign(new Error("User is not a member of this org"), {
+        code: "NOT_FOUND",
+      });
+    }
+
+    // If demoting the last owner, refuse.
+    if (target.role === "owner" && newRole !== "owner") {
+      const ownerCount = await prisma.orgMember.count({
+        where: { organizationId, role: "owner" },
+      });
+      if (ownerCount <= 1) {
+        throw Object.assign(
+          new Error("Cannot demote the last owner of the organization"),
+          { code: "VALIDATION_ERROR" },
+        );
+      }
+    }
+
+    await prisma.orgMember.update({
+      where: { id: target.id },
+      data: { role: newRole },
+    });
+    logger.info("Org member role updated", {
+      userId,
+      organizationId,
+      newRole,
+    });
+  }
 }
 
 export const organizationService = new OrganizationService();

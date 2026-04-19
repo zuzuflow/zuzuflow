@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import {
   Eye,
   EyeOff,
@@ -36,6 +36,9 @@ import { spring } from "@/lib/motion";
 function finalizeLogin(
   result: LoginResult,
   navigate: ReturnType<typeof useNavigate>,
+  /** If set, we came from an invite email — send the user to the accept page
+   *  instead of the dashboard so they can complete the flow with one click. */
+  inviteToken?: string | null,
 ) {
   if (result.organizations && result.organizations.length > 1) {
     useOrgStore
@@ -68,7 +71,7 @@ function finalizeLogin(
     useOrgStore.getState().setCurrentOrgId(org.id);
     useApiConfigStore.getState().setOrganizationId(org.id);
   }
-  navigate("/", { replace: true });
+  navigate(inviteToken ? `/invite/${inviteToken}` : "/", { replace: true });
 }
 
 // ─── MFA step ─────────────────────────────────────────────────────────────────
@@ -620,6 +623,8 @@ function MfaRecoveryStep({ onBack }: { onBack: () => void }) {
 
 export function LoginPage(): React.ReactElement {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const inviteToken = searchParams.get("invite");
   const [usernameOrEmail, setUsernameOrEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -665,7 +670,7 @@ export function LoginPage(): React.ReactElement {
         startEnrollment(result);
         return;
       }
-      finalizeLogin(result, navigate);
+      finalizeLogin(result, navigate, inviteToken);
     } catch (err) {
       setError((err as Error).message || "Login failed");
     } finally {
@@ -761,7 +766,7 @@ export function LoginPage(): React.ReactElement {
               >
                 <MfaStep
                   challenge={mfaChallenge}
-                  onSuccess={(result) => finalizeLogin(result, navigate)}
+                  onSuccess={(result) => finalizeLogin(result, navigate, inviteToken)}
                   onBack={() => {
                     setMfaChallenge(null);
                     setError("");
