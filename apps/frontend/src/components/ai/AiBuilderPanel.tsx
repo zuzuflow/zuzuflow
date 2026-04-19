@@ -67,6 +67,10 @@ export function AiBuilderPanel({
   const resetWorkflow = useWorkflowStore((s) => s.resetWorkflow);
   const toTemplate = useWorkflowStore((s) => s.toTemplate);
   const nodes = useWorkflowStore((s) => s.nodes);
+  const workflowId = useWorkflowStore((s) => s.workflowId);
+  const workflowName = useWorkflowStore((s) => s.workflowName);
+  const workflowStatus = useWorkflowStore((s) => s.workflowStatus);
+  const tags = useWorkflowStore((s) => s.tags);
 
   const hasExistingNodes = nodes.length > 0;
 
@@ -97,8 +101,19 @@ export function AiBuilderPanel({
 
   function handleApply() {
     if (!result?.template) return;
-    resetWorkflow();
-    loadTemplate(result.template);
+    if (mode === "update" && workflowId) {
+      // Preserve existing workflow ID, name, status, tags
+      loadTemplate(
+        result.template,
+        workflowId,
+        workflowName,
+        workflowStatus ?? undefined,
+        tags,
+      );
+    } else {
+      resetWorkflow();
+      loadTemplate(result.template);
+    }
     onClose();
   }
 
