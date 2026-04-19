@@ -989,7 +989,7 @@ The workflow template must follow this exact structure:
     { "id": "<unique-id>", "kind": "<NodeKind>", "label": "<display label>", "config": { ... }, "position": { "x": <number>, "y": <number> } }
   ],
   "edges": [
-    { "id": "<unique-id>", "source": "<node-id>", "target": "<node-id>", "sourceHandle": "source", "targetHandle": "target" }
+    { "id": "<unique-id>", "source": "<node-id>", "target": "<node-id>", "sourceHandle": "out", "targetHandle": "in" }
   ]
 }
 
@@ -1037,7 +1037,8 @@ LAYOUT RULES:
 - Start triggers at x:100, y:200
 - For branches (if_else), offset true/false paths vertically by ±100px
 - Each node needs a unique id (use descriptive names like "trigger_1", "http_1", etc.)
-- Connect nodes with edges from source to target
+- Connect nodes with edges using sourceHandle "out" and targetHandle "in"
+- For if_else nodes, use sourceHandle "true" or "false" instead of "out"
 
 IMPORTANT: 
 - Return ONLY valid JSON, no markdown code fences, no explanation text
