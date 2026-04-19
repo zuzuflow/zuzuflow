@@ -9,7 +9,15 @@ import {
   type Connection,
 } from "@xyflow/react";
 import { v4 as uuidv4 } from "uuid";
-import type { NodeKind, NodeConfig, WorkflowTemplate, WorkflowNode, NodeStyle, EdgeStyle, WorkflowSettings } from "@workflow/shared";
+import type {
+  NodeKind,
+  NodeConfig,
+  WorkflowTemplate,
+  WorkflowNode,
+  NodeStyle,
+  EdgeStyle,
+  WorkflowSettings,
+} from "@workflow/shared";
 import { nodeRegistry } from "../lib/nodeRegistry";
 
 // xyflow v12 requires Record<string, unknown> for node/edge data generics.
@@ -61,7 +69,11 @@ interface WorkflowState {
   updateNodeConfig: (nodeId: string, config: Partial<NodeConfig>) => void;
   updateNodeLabel: (nodeId: string, label: string) => void;
   updateNodeStyle: (nodeId: string, style: NodeStyle) => void;
-  addNode: (kind: NodeKind, position: { x: number; y: number }, configOverride?: Partial<NodeConfig>) => void;
+  addNode: (
+    kind: NodeKind,
+    position: { x: number; y: number },
+    configOverride?: Partial<NodeConfig>,
+  ) => void;
   removeNode: (nodeId: string) => void;
 
   // Edge mutations
@@ -74,7 +86,7 @@ interface WorkflowState {
     name?: string,
     status?: string,
     tags?: string[],
-    workflowKey?: string
+    workflowKey?: string,
   ) => void;
   toTemplate: () => WorkflowTemplate;
 
@@ -89,7 +101,11 @@ interface WorkflowState {
 
   // Meta
   setWorkflowName: (name: string) => void;
-  markSaved: (workflowId: string, status?: string, workflowKey?: string) => void;
+  markSaved: (
+    workflowId: string,
+    status?: string,
+    workflowKey?: string,
+  ) => void;
   setWorkflowStatus: (status: string) => void;
   resetWorkflow: () => void;
 }
@@ -152,7 +168,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         const wn = getNodeData(n);
         return {
           ...n,
-          data: asData({ ...wn, config: { ...wn.config, ...configPatch } as NodeConfig }),
+          data: asData({
+            ...wn,
+            config: { ...wn.config, ...configPatch } as NodeConfig,
+          }),
         };
       }),
       isDirty: true,
@@ -175,7 +194,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       nodes: state.nodes.map((n) => {
         if (n.id !== nodeId) return n;
         const wn = getNodeData(n);
-        return { ...n, data: asData({ ...wn, style: { ...wn.style, ...style } }) };
+        return {
+          ...n,
+          data: asData({ ...wn, style: { ...wn.style, ...style } }),
+        };
       }),
       isDirty: true,
     }));
@@ -199,7 +221,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       id,
       kind,
       label: entry.defaultLabel,
-      config: configOverride ? { ...entry.defaultConfig, ...configOverride } as NodeConfig : { ...entry.defaultConfig },
+      config: configOverride
+        ? ({ ...entry.defaultConfig, ...configOverride } as NodeConfig)
+        : { ...entry.defaultConfig },
       position,
     };
     const flowNode: FlowNode = {
@@ -218,9 +242,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     set((state) => ({
       nodes: state.nodes.filter((n) => n.id !== nodeId),
       edges: state.edges.filter(
-        (e) => e.source !== nodeId && e.target !== nodeId
+        (e) => e.source !== nodeId && e.target !== nodeId,
       ),
-      selectedNodeId: state.selectedNodeId === nodeId ? null : state.selectedNodeId,
+      selectedNodeId:
+        state.selectedNodeId === nodeId ? null : state.selectedNodeId,
       isDirty: true,
     }));
   },
@@ -278,7 +303,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         target: e.target,
         sourceHandle: e.sourceHandle ?? undefined,
         label: typeof e.label === "string" ? e.label : undefined,
-        style: (e.data && Object.keys(e.data).length > 0) ? (e.data as EdgeStyle) : undefined,
+        style:
+          e.data && Object.keys(e.data).length > 0
+            ? (e.data as EdgeStyle)
+            : undefined,
       })),
       ...(hasSettings ? { settings } : {}),
     };
@@ -288,7 +316,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const errors: string[] = [];
     const { nodes } = get();
     const externalTriggerCount = nodes.filter(
-      (n) => getNodeData(n).kind === "external_trigger"
+      (n) => getNodeData(n).kind === "external_trigger",
     ).length;
     if (externalTriggerCount > 1) {
       errors.push("Only one External Trigger node is allowed per workflow.");
@@ -300,26 +328,28 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   setWorkflowName: (name) => set({ workflowName: name, isDirty: true }),
 
-  markSaved: (workflowId, status, workflowKey) => set({
-    workflowId,
-    isDirty: false,
-    ...(status !== undefined ? { workflowStatus: status } : {}),
-    ...(workflowKey !== undefined ? { workflowKey } : {}),
-  }),
+  markSaved: (workflowId, status, workflowKey) =>
+    set({
+      workflowId,
+      isDirty: false,
+      ...(status !== undefined ? { workflowStatus: status } : {}),
+      ...(workflowKey !== undefined ? { workflowKey } : {}),
+    }),
 
   setWorkflowStatus: (status) => set({ workflowStatus: status }),
 
-  resetWorkflow: () => set({
-    nodes: [],
-    edges: [],
-    selectedNodeId: null,
-    selectedEdgeId: null,
-    workflowId: null,
-    workflowKey: null,
-    workflowName: "Untitled Workflow",
-    workflowStatus: null,
-    settings: {},
-    tags: [],
-    isDirty: false,
-  }),
+  resetWorkflow: () =>
+    set({
+      nodes: [],
+      edges: [],
+      selectedNodeId: null,
+      selectedEdgeId: null,
+      workflowId: null,
+      workflowKey: null,
+      workflowName: "Untitled Workflow",
+      workflowStatus: null,
+      settings: {},
+      tags: [],
+      isDirty: false,
+    }),
 }));
