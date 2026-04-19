@@ -10,11 +10,13 @@ import { config } from "../config";
 import { tagService } from "./TagService";
 import { taskQueueResolver } from "./TaskQueueResolver";
 import { customNodeService } from "./CustomNodeService";
+import { webhookService } from "./WebhookService";
 import type {
   WorkflowTemplate,
   WorkflowNode,
   WorkflowEdge,
   CronConfig,
+  WebhookConfig,
 } from "@workflow/shared";
 
 // =============================================================================
@@ -275,6 +277,65 @@ async function autoInstallCustomNodeTemplates(
   }
 }
 
+/**
+ * Pull every `kind: "webhook"` node out of a template, shaping it into the
+ * input that WebhookService.syncEndpointsForWorkflow expects.
+ */
+function extractWebhookNodes(template: WorkflowTemplate): Array<{
+  path: string;
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  auth?: WebhookConfig["auth"];
+}> {
+  const out: Array<{
+    path: string;
+    method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+    auth?: WebhookConfig["auth"];
+  }> = [];
+  for (const n of template.nodes) {
+    if (n.kind !== "webhook") continue;
+    const cfg = n.config as WebhookConfig | undefined;
+    if (!cfg?.path) continue;
+    out.push({ path: cfg.path, method: cfg.method, auth: cfg.auth });
+  }
+  return out;
+}
+
+/**
+ * Keep WebhookEndpoint rows in sync with the workflow's declared webhook
+ * nodes. Called on create/update/activate so that hitting the inbound URL
+ * actually finds a registered endpoint instead of 404'ing.
+ *
+ * `isActive` tracks the workflow's status — endpoints are only "live" while
+ * the workflow is active. Deactivate flips them off without deleting so
+ * re-activation re-uses the same id.
+ */
+async function syncWebhookEndpoints(
+  workflowId: string,
+  environmentId: string,
+  template: WorkflowTemplate,
+  isActive: boolean,
+): Promise<void> {
+  const webhookNodes = extractWebhookNodes(template);
+  // Even when there are no webhook nodes, call sync so that any leftover
+  // endpoints from a previous version of the template are cleaned up.
+  try {
+    await webhookService.syncEndpointsForWorkflow({
+      workflowId,
+      environmentId,
+      webhookNodes,
+      isActive,
+    });
+  } catch (err) {
+    const code = (err as { code?: string })?.code;
+    if (code === "CONFLICT") {
+      // Rethrow so the API surfaces a 409 to the caller — two workflows
+      // can't share a webhook path.
+      throw err;
+    }
+    logger.warn("Webhook endpoint sync failed", { workflowId, err });
+  }
+}
+
 export class WorkflowService {
   // ---------------------------------------------------------------------------
   // Create
@@ -347,6 +408,18 @@ export class WorkflowService {
         include: withTags,
       });
     });
+
+    // Create corresponding WebhookEndpoint rows for any webhook trigger
+    // nodes. New workflows start as "draft" so endpoints are created
+    // inactive — activateWorkflow flips them on. Without this, the inbound
+    // URL shown in the UI would 404 with "No webhook registered at path"
+    // until the user manually hit POST /webhooks/register.
+    await syncWebhookEndpoints(
+      workflow!.id,
+      input.environmentId,
+      input.template,
+      false,
+    );
 
     logger.info("Workflow created", {
       workflowId: workflow!.id,
@@ -643,6 +716,18 @@ export class WorkflowService {
       }
     }
 
+    // Sync webhook endpoints whenever the template changed. Keep the
+    // isActive flag aligned with the workflow's current status so a draft
+    // workflow doesn't expose endpoints the moment a webhook node is added.
+    if (input.template) {
+      await syncWebhookEndpoints(
+        id,
+        existing.environmentId,
+        input.template,
+        existing.status === "active",
+      );
+    }
+
     logger.info("Workflow updated", {
       workflowId: id,
       version: workflow!.version,
@@ -685,6 +770,11 @@ export class WorkflowService {
       await this._upsertCronSchedule(id, template, cronNode);
     }
 
+    // Activate webhook endpoints — creates rows for newly-added webhook
+    // nodes, removes ones for paths no longer in the template, and flips
+    // every row owned by this workflow to isActive=true.
+    await syncWebhookEndpoints(id, workflow.environmentId, template, true);
+
     const updated = await prisma.workflow.update({
       where: { id },
       data: { status: "active" },
@@ -706,6 +796,18 @@ export class WorkflowService {
       logger.info("Temporal Schedule deleted", { scheduleId });
     } catch {
       // Schedule may not exist — ignore
+    }
+
+    // Flip every webhook endpoint owned by this workflow to inactive. We
+    // don't delete them so re-activating later preserves the same id and
+    // URL — subscribers upstream keep working.
+    try {
+      await webhookService.setEndpointsActive(id, false);
+    } catch (err) {
+      logger.warn("Could not deactivate webhook endpoints", {
+        workflowId: id,
+        err,
+      });
     }
 
     const updated = await prisma.workflow.update({

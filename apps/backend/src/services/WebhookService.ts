@@ -241,6 +241,134 @@ export class WebhookService {
   }
 
   // ---------------------------------------------------------------------------
+  // Sync endpoints for a workflow from its template
+  //
+  // Called by WorkflowService on create/update/activate. Walks the workflow's
+  // `kind: "webhook"` nodes, upserts a WebhookEndpoint row per declared path,
+  // and deletes endpoints this workflow used to own but whose path is no
+  // longer in the template. Without this, inbound requests 404 with
+  // "No webhook registered at path" even after Save + Activate — because
+  // nothing on the write path had registered the endpoint.
+  // ---------------------------------------------------------------------------
+  async syncEndpointsForWorkflow(input: {
+    workflowId: string;
+    environmentId: string;
+    webhookNodes: Array<{
+      path: string;
+      method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+      auth?: WebhookAuth;
+    }>;
+    isActive?: boolean;
+  }): Promise<void> {
+    const {
+      workflowId,
+      environmentId,
+      webhookNodes,
+      isActive = true,
+    } = input;
+
+    const desiredByPath = new Map(webhookNodes.map((n) => [n.path, n]));
+    const existing = await prisma.webhookEndpoint.findMany({
+      where: { workflowId },
+    });
+
+    // Delete any endpoints whose path is no longer declared in the template.
+    const toDelete = existing.filter((e) => !desiredByPath.has(e.path));
+    if (toDelete.length > 0) {
+      await prisma.webhookEndpoint.deleteMany({
+        where: { id: { in: toDelete.map((e) => e.id) } },
+      });
+    }
+
+    for (const [path, node] of desiredByPath) {
+      const authType = node.auth?.type ?? "none";
+      const authFields = {
+        authType,
+        secret: node.auth?.type === "hmac" ? node.auth.secret : null,
+        basicUsername:
+          node.auth?.type === "basic" ? node.auth.username : null,
+        basicPassword:
+          node.auth?.type === "basic" ? node.auth.password : null,
+        jwtJwksUri:
+          node.auth?.type === "jwt" ? (node.auth.jwksUri ?? null) : null,
+        jwtPublicKey:
+          node.auth?.type === "jwt" ? (node.auth.publicKey ?? null) : null,
+        jwtIssuer:
+          node.auth?.type === "jwt" ? (node.auth.issuer ?? null) : null,
+        jwtAudience:
+          node.auth?.type === "jwt" ? (node.auth.audience ?? null) : null,
+      };
+      const method = (node.method ?? "POST") as
+        | "GET"
+        | "POST"
+        | "PUT"
+        | "PATCH"
+        | "DELETE";
+
+      const existingRow = existing.find((e) => e.path === path);
+      if (existingRow) {
+        if (existingRow.workflowId !== workflowId) {
+          // Another workflow owns this path. The WebhookEndpoint.path column
+          // is globally unique, so we can't silently steal it. Surface a
+          // conflict — users should pick a different path.
+          throw Object.assign(
+            new Error(
+              `Webhook path "${path}" is already registered by another workflow`,
+            ),
+            { code: "CONFLICT" },
+          );
+        }
+        await prisma.webhookEndpoint.update({
+          where: { id: existingRow.id },
+          data: { method, isActive, environmentId, ...authFields },
+        });
+      } else {
+        try {
+          await prisma.webhookEndpoint.create({
+            data: {
+              workflowId,
+              path,
+              method,
+              isActive,
+              environmentId,
+              ...authFields,
+            },
+          });
+        } catch (err) {
+          // Unique-constraint collision on `path` — another workflow owns it.
+          if (
+            err instanceof Prisma.PrismaClientKnownRequestError &&
+            err.code === "P2002"
+          ) {
+            throw Object.assign(
+              new Error(
+                `Webhook path "${path}" is already registered by another workflow`,
+              ),
+              { code: "CONFLICT" },
+            );
+          }
+          throw err;
+        }
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Flip all endpoints for a workflow active / inactive — used by
+  // WorkflowService.deactivateWorkflow so the inbound URL stops accepting
+  // requests without us having to delete the endpoints outright.
+  // ---------------------------------------------------------------------------
+  async setEndpointsActive(
+    workflowId: string,
+    isActive: boolean,
+  ): Promise<void> {
+    await prisma.webhookEndpoint.updateMany({
+      where: { workflowId },
+      data: { isActive },
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Delete
   // ---------------------------------------------------------------------------
   async deleteEndpoint(id: string) {
