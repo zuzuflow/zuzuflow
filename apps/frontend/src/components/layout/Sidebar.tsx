@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
-  LayoutGrid,
   KeyRound,
   Activity,
   Settings,
@@ -12,6 +11,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   LayoutDashboard,
+  Workflow,
 } from "lucide-react";
 import { Logo } from "@/components/branding/Logo";
 import { OrgSwitcher } from "@/components/layout/OrgSwitcher";
@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/", icon: LayoutGrid, label: "Workflows" },
+  { to: "/workflows", icon: Workflow, label: "Workflows" },
   { to: "/logs", icon: Activity, label: "Logs" },
   { to: "/credentials", icon: KeyRound, label: "Credentials" },
   { to: "/settings", icon: Settings, label: "Settings" },

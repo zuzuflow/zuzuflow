@@ -52,8 +52,11 @@ export default function App(): React.ReactElement {
             </AuthGuard>
           }
         >
-          <Route path="/" element={<WorkflowsPage />} />
+          {/* `/` redirects to /dashboard — the app's real home screen.
+              `/workflows` is the list page (was previously mounted on `/`). */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/workflows" element={<WorkflowsPage />} />
           <Route path="/credentials" element={<CredentialsPage />} />
           <Route path="/logs" element={<LogsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
