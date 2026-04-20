@@ -103,6 +103,15 @@ interface WorkflowState {
   groupNodes: (ids: string[], opts?: { locked?: boolean }) => string | null;
   /** Dissolve a group — children keep their world positions, group is removed. */
   ungroupNode: (groupId: string) => void;
+  /**
+   * Recompute a group's width / height (and top-left) to fit its current
+   * children tightly. Used to correct groups whose stored dimensions are
+   * stale (e.g. created with an older buggy bbox calculation, or whose
+   * children have moved since creation). World positions of children are
+   * preserved — the group's position moves and each child's parent-relative
+   * position is rewritten to match.
+   */
+  fitGroupToContent: (groupId: string) => void;
 
   // Edge mutations
   updateEdgeStyle: (edgeId: string, style: EdgeStyle) => void;
@@ -499,6 +508,111 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         selectedEdgeId: null,
         isDirty: true,
       };
+    });
+  },
+
+  fitGroupToContent: (groupId) => {
+    set((state) => {
+      const group = state.nodes.find(
+        (n) => n.id === groupId && n.type === "group",
+      );
+      if (!group) return state;
+
+      const children = state.nodes.filter(
+        (n) => (n as FlowNode & { parentId?: string }).parentId === groupId,
+      );
+      if (children.length === 0) return state;
+
+      // Same measurement + per-node cap as groupNodes — keeps behaviour
+      // consistent whether you fit on create or refit later.
+      const NODE_MAX_W = 360;
+      const NODE_MAX_H = 180;
+      const measure = (n: FlowNode): { w: number; h: number } => {
+        type Measurable = FlowNode & {
+          measured?: { width?: number; height?: number };
+        };
+        const m = (n as Measurable).measured;
+        let w: number | undefined;
+        let h: number | undefined;
+        if (m?.width && m?.height) {
+          w = m.width;
+          h = m.height;
+        } else if (n.width && n.height) {
+          w = n.width;
+          h = n.height;
+        }
+        return {
+          w: Math.min(NODE_MAX_W, Math.max(1, w ?? 240)),
+          h: Math.min(NODE_MAX_H, Math.max(1, h ?? 90)),
+        };
+      };
+
+      const PADDING = 40;
+      const HEADER = 28;
+
+      // Bounding box in PARENT-RELATIVE coords (children already relative).
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
+      for (const c of children) {
+        const { w, h } = measure(c);
+        minX = Math.min(minX, c.position.x);
+        minY = Math.min(minY, c.position.y);
+        maxX = Math.max(maxX, c.position.x + w);
+        maxY = Math.max(maxY, c.position.y + h);
+      }
+
+      // The group's new top-left shifts by (minX - PADDING, minY - PADDING - HEADER)
+      // in world space. Children's relative positions need to compensate so
+      // their world positions stay put.
+      const shiftX = minX - PADDING;
+      const shiftY = minY - PADDING - HEADER;
+      const width = maxX - minX + PADDING * 2;
+      const height = maxY - minY + PADDING * 2 + HEADER;
+
+      const newGroupPos = {
+        x: group.position.x + shiftX,
+        y: group.position.y + shiftY,
+      };
+
+      const groupData = getNodeData(group);
+      const groupCfg = groupData.config as GroupConfig;
+      const updatedGroupCfg: GroupConfig = {
+        ...groupCfg,
+        width,
+        height,
+      };
+
+      const nextNodes: FlowNode[] = state.nodes.map((n) => {
+        if (n.id === groupId) {
+          return {
+            ...n,
+            position: newGroupPos,
+            data: asData({
+              ...groupData,
+              position: newGroupPos,
+              config: updatedGroupCfg,
+            }),
+          };
+        }
+        const parentId = (n as FlowNode & { parentId?: string }).parentId;
+        if (parentId === groupId) {
+          const wn = getNodeData(n);
+          const newRel = {
+            x: n.position.x - shiftX,
+            y: n.position.y - shiftY,
+          };
+          return {
+            ...n,
+            position: newRel,
+            data: asData({ ...wn, position: newRel }),
+          };
+        }
+        return n;
+      });
+
+      return { nodes: nextNodes, isDirty: true };
     });
   },
 

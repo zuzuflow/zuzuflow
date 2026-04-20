@@ -1,8 +1,10 @@
 import React from "react";
-import { Lock, Unlock } from "lucide-react";
+import { Lock, Unlock, Maximize2 } from "lucide-react";
 import type { GroupConfig } from "@workflow/shared";
 import { Input } from "../../ui/input";
 import { Label } from "../../ui/label";
+import { Button } from "../../ui/button";
+import { useWorkflowStore } from "../../../store/workflowStore";
 
 interface GroupFormProps {
   config: GroupConfig;
@@ -16,6 +18,8 @@ export function GroupForm({
   // The PropertiesPanel header already renders a Label input for every
   // node (it drives both config.label and the node's display label). The
   // form used to render a second Label — dropped here so there's only one.
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
+  const fitGroupToContent = useWorkflowStore((s) => s.fitGroupToContent);
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
@@ -85,6 +89,28 @@ export function GroupForm({
           />
         </div>
       </div>
+
+      {/* Snap width + height back to the tight bounding box of the current
+          children. Useful for groups created before the sizing logic was
+          tightened — their stored dimensions can be stale. */}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-full"
+        disabled={!selectedNodeId}
+        onClick={() => {
+          if (selectedNodeId) fitGroupToContent(selectedNodeId);
+        }}
+      >
+        <Maximize2 size={11} className="mr-1.5" />
+        Fit to content
+      </Button>
+      <p className="text-[10px] text-muted-foreground -mt-2 leading-relaxed">
+        Recomputes the dotted border to hug the current children. Use this
+        to correct groups whose frame got left stretched after nodes moved
+        or were removed.
+      </p>
     </div>
   );
 }
