@@ -1695,15 +1695,19 @@ export async function graphInterpreterWorkflow(
           // ------------------------------------------------------------------
           case "response": {
             const cfg = node.config as ResponseConfig;
-            const body = cfg.body
-              ? interpolate(cfg.body, nodeOutputs)
-              : undefined;
+            // Inject an `input` alias pointing at the immediately-upstream
+            // node's output so common template shorthands like
+            // `{{input.content}}` resolve without forcing users to hard-
+            // code the upstream node's id. The alias doesn't shadow a real
+            // node called "input" (none of the built-in kinds use that id).
+            const ctx: Record<string, unknown> =
+              incomingFrom !== undefined
+                ? { ...nodeOutputs, input: nodeOutputs[incomingFrom] ?? {} }
+                : nodeOutputs;
+            const body = cfg.body ? interpolate(cfg.body, ctx) : undefined;
             const headers: Record<string, string> = {};
             for (const h of cfg.headers ?? []) {
-              headers[interpolate(h.key, nodeOutputs)] = interpolate(
-                h.value,
-                nodeOutputs,
-              );
+              headers[interpolate(h.key, ctx)] = interpolate(h.value, ctx);
             }
             nodeOutput = {
               _isWebhookResponse: true,
