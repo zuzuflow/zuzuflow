@@ -233,12 +233,30 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       nodes: state.nodes.map((n) => {
         if (n.id !== nodeId) return n;
         const wn = getNodeData(n);
+        const nextConfig = { ...wn.config, ...configPatch } as NodeConfig;
+        // For group nodes, mirror config.width / config.height up to the
+        // top-level FlowNode so xyflow's bounding box stays in lock-step
+        // with the rendered dotted border. The Width / Height inputs in
+        // GroupForm go through this path, so without the mirror the form
+        // would paint a wider/taller frame than xyflow actually tracked.
+        const dimensionSync =
+          n.type === "group"
+            ? (() => {
+                const p = configPatch as { width?: number; height?: number };
+                const next: { width?: number; height?: number } = {};
+                if (typeof p.width === "number" && p.width > 0) {
+                  next.width = p.width;
+                }
+                if (typeof p.height === "number" && p.height > 0) {
+                  next.height = p.height;
+                }
+                return next;
+              })()
+            : {};
         return {
           ...n,
-          data: asData({
-            ...wn,
-            config: { ...wn.config, ...configPatch } as NodeConfig,
-          }),
+          ...dimensionSync,
+          data: asData({ ...wn, config: nextConfig }),
         };
       }),
       isDirty: true,
@@ -437,10 +455,18 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       config: cfg,
       position: groupPos,
     };
+    // Width / height MUST be set at the top level of the FlowNode so
+    // xyflow's internal bounding box matches the dotted border we render.
+    // Without these, xyflow auto-measures the wrapper DOM (which becomes
+    // just the label chip's size ~90x164) while the inner styled div
+    // overflows — producing the "inner width correct, outer frame wrong"
+    // visual bug.
     const groupFlowNode: FlowNode = {
       id: groupId,
       type: "group",
       position: groupPos,
+      width,
+      height,
       data: asData(groupWn),
       // Make sure the group paints BEHIND its children.
       zIndex: -1,
@@ -589,6 +615,12 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           return {
             ...n,
             position: newGroupPos,
+            // Keep the top-level width / height on the FlowNode in sync
+            // with the config — xyflow uses these for its own bounding
+            // box; without them the dotted border would overflow the
+            // xyflow-measured wrapper again.
+            width,
+            height,
             data: asData({
               ...groupData,
               position: newGroupPos,
@@ -639,7 +671,19 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         };
       }
       if (wn.kind === "group") {
-        return { ...base, zIndex: -1 };
+        // Rehydrate top-level width / height from the config snapshot so
+        // xyflow renders the group wrapper at the same size as the stored
+        // dotted border. Without these, a saved workflow would come back
+        // with the "tiny wrapper, oversized inner div" bug even for
+        // groups that were saved correctly.
+        const cfg = wn.config as { width?: number; height?: number };
+        return {
+          ...base,
+          zIndex: -1,
+          ...(cfg.width && cfg.height
+            ? { width: cfg.width, height: cfg.height }
+            : {}),
+        };
       }
       return base;
     });

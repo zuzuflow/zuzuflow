@@ -20,18 +20,19 @@ export function GroupNode({
   const border = cfg.locked ? "border-amber-500/70" : "border-slate-400/70";
   const fill = (cfg.color ?? "#64748b") + "14"; // ~8% alpha
 
+  // Size comes from the FlowNode's top-level width/height, which xyflow
+  // paints onto the .react-flow__node wrapper. Filling that wrapper with
+  // w-full/h-full keeps the dotted border exactly flush with xyflow's
+  // bounding box (previously we restated the size via inline style, which
+  // made the dotted div overflow a tiny auto-sized xyflow wrapper).
   return (
     <div
       className={cn(
-        "relative rounded-lg border-2 border-dashed transition-colors",
+        "relative w-full h-full rounded-lg border-2 border-dashed transition-colors",
         border,
         selected && "border-indigo-400 ring-2 ring-indigo-400/30",
       )}
-      style={{
-        width: cfg.width,
-        height: cfg.height,
-        backgroundColor: fill,
-      }}
+      style={{ backgroundColor: fill }}
     >
       {/* Label chip anchored top-left, sitting on the dotted border */}
       <div className="absolute -top-3 left-3 flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-900 border border-slate-700 text-[10px] text-slate-200 shadow-sm">
