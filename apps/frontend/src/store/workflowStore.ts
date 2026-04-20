@@ -362,13 +362,39 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
     const PADDING = 40;
     const HEADER = 28; // extra top padding for the label chip
+
+    // Resolve each node's on-screen size. xyflow exposes `measured.width`
+    // after the DOM paints. If that's missing (rare but possible for a node
+    // freshly dropped and immediately grouped) fall back to the node's
+    // top-level `width`, then the actual DOM rect, then a generous default
+    // — 240px was too narrow; many nodes render 320–400px wide once filled
+    // in, causing the group frame to be cut short and children to visually
+    // leak outside the dotted border.
+    const measure = (n: FlowNode): { w: number; h: number } => {
+      type Measurable = FlowNode & { measured?: { width?: number; height?: number } };
+      const m = (n as Measurable).measured;
+      if (m?.width && m?.height) return { w: m.width, h: m.height };
+      if (n.width && n.height) return { w: n.width, h: n.height };
+      if (typeof document !== "undefined") {
+        const el = document.querySelector<HTMLElement>(
+          `.react-flow__node[data-id="${CSS.escape(n.id)}"]`,
+        );
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            return { w: rect.width, h: rect.height };
+          }
+        }
+      }
+      return { w: 320, h: 120 };
+    };
+
     let minX = Infinity,
       minY = Infinity,
       maxX = -Infinity,
       maxY = -Infinity;
     for (const n of selected) {
-      const w = n.width ?? 240;
-      const h = n.height ?? 80;
+      const { w, h } = measure(n);
       minX = Math.min(minX, n.position.x);
       minY = Math.min(minY, n.position.y);
       maxX = Math.max(maxX, n.position.x + w);

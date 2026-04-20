@@ -13,17 +13,11 @@ export function GroupForm({
   config,
   onChange,
 }: GroupFormProps): React.ReactElement {
+  // The PropertiesPanel header already renders a Label input for every
+  // node (it drives both config.label and the node's display label). The
+  // form used to render a second Label — dropped here so there's only one.
   return (
     <div className="space-y-4">
-      <div>
-        <Label>Label</Label>
-        <Input
-          value={config.label ?? ""}
-          onChange={(e) => onChange({ label: e.target.value })}
-          placeholder="Group"
-        />
-      </div>
-
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label>Color</Label>
