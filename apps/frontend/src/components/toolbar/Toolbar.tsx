@@ -26,6 +26,7 @@ import { useWorkflowStore } from "../../store/workflowStore";
 import { useExecutionStore } from "../../store/executionStore";
 import { useWorkflowSerializer } from "../../hooks/useWorkflowSerializer";
 import { useExecutionSocket } from "../../hooks/useExecutionSocket";
+import { saveCurrentWorkflow } from "../../lib/saveWorkflow";
 import * as api from "../../lib/api";
 import { cn } from "../../lib/utils";
 import { DesignPanel } from "../design/DesignPanel";
@@ -106,6 +107,10 @@ export function Toolbar({ onNavigateBack }: ToolbarProps): React.ReactElement {
   const isDeactivating = activateState === "deactivating";
 
   // ── Save ──────────────────────────────────────────────────────────────────
+  // Delegates to saveCurrentWorkflow() in lib/saveWorkflow.ts so the
+  // UnsavedChangesGuard can save via the exact same code path from its
+  // "Save & leave" button. This local handler keeps the UI state machine
+  // (saving / saved / error) that drives the Save button's look.
   const handleSave = async () => {
     const errors = validateWorkflow();
     if (errors.length > 0) {
@@ -113,19 +118,13 @@ export function Toolbar({ onNavigateBack }: ToolbarProps): React.ReactElement {
       return;
     }
     setSaveState("saving");
-    try {
-      const template = toTemplate();
-      if (workflowId) {
-        const updated = await api.updateWorkflow(workflowId, { name: workflowName, template, tags });
-        markSaved(workflowId, updated.status, updated.key);
-      } else {
-        const result = await api.createWorkflow({ name: workflowName, template, isSubworkflow: isNewSubworkflow || undefined, tags });
-        markSaved(result.id, result.status, result.key);
-      }
+    const result = await saveCurrentWorkflow();
+    if (result.ok) {
       setSaveState("saved");
       setTimeout(() => setSaveState("idle"), 2000);
-    } catch (err) {
-      console.error("Save failed:", err);
+    } else {
+      console.error("Save failed:", result.error);
+      toast.error(result.error);
       setSaveState("error");
       setTimeout(() => setSaveState("idle"), 3000);
     }
