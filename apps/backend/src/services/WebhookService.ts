@@ -532,6 +532,66 @@ export class WebhookService {
 
     return execution;
   }
+
+  // ---------------------------------------------------------------------------
+  // Wait for a just-started execution to finish and pull the Response node's
+  // output (if any) back out. Used by the inbound webhook router so the
+  // external caller gets the workflow's real response — `{statusCode, body,
+  // headers, contentType}` — rather than a hardcoded `{received: true}`.
+  //
+  // Workflow return shape is `{ outputIndex: 0, data: <finalOutput> }`. When
+  // a Response node ran, `finalOutput` carries the `_isWebhookResponse`
+  // envelope; otherwise we return null and let the caller fall back.
+  //
+  // Times out after `timeoutMs`. Long-running workflows should split their
+  // HTTP response off via a dedicated Response node that fires early in the
+  // graph, or accept the fallback `{received}` + a later side-effect.
+  // ---------------------------------------------------------------------------
+  async waitForWebhookResponse(
+    temporalWorkflowId: string,
+    timeoutMs: number,
+  ): Promise<{
+    statusCode: number;
+    contentType: string;
+    headers: Record<string, string>;
+    body: unknown;
+  } | null> {
+    try {
+      const temporal = await getTemporalClient();
+      const handle = temporal.workflow.getHandle(temporalWorkflowId);
+      // Race handle.result() against a timeout so a broken/hung workflow
+      // doesn't tie up the HTTP request forever.
+      const result = (await Promise.race([
+        handle.result(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("TIMEOUT")), timeoutMs),
+        ),
+      ])) as { outputIndex?: number; data?: Record<string, unknown> };
+
+      const data = result?.data;
+      if (!data || !(data as { _isWebhookResponse?: boolean })._isWebhookResponse) {
+        return null;
+      }
+      const envelope = data as {
+        statusCode?: number;
+        contentType?: string;
+        headers?: Record<string, string>;
+        body?: unknown;
+      };
+      return {
+        statusCode: envelope.statusCode ?? 200,
+        contentType: envelope.contentType ?? "application/json",
+        headers: envelope.headers ?? {},
+        body: envelope.body,
+      };
+    } catch (err) {
+      logger.warn("waitForWebhookResponse failed or timed out", {
+        temporalWorkflowId,
+        err: (err as Error).message,
+      });
+      return null;
+    }
+  }
 }
 
 export const webhookService = new WebhookService();

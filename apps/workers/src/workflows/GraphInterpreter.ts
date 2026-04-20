@@ -2044,14 +2044,24 @@ export async function graphInterpreterWorkflow(
       ? (nodeOutputs[lastNodeId] as Record<string, unknown>)
       : {};
 
-    // Scan all completed nodes; keep overwriting so the last trigger_output wins
+    // Scan all completed nodes; keep overwriting so the last terminal
+    // output node wins (trigger_output OR response). Webhook callers need
+    // the Response node's data (statusCode / body / headers) to surface
+    // back out of the Temporal workflow so the HTTP handler can replay it
+    // to the external caller. Previously only `_isTriggerOutput` was
+    // promoted — a webhook-triggered workflow's Response node landed in
+    // nodeOutputs but was invisible to the webhook handler, which then
+    // fell back to `{received: true}` regardless of what the workflow
+    // actually produced.
     for (const completedNodeId of completedNodes) {
       const out = nodeOutputs[completedNodeId] as
         | Record<string, unknown>
         | undefined;
       if (out?._isTriggerOutput) {
         finalOutput = (out.data as Record<string, unknown>) ?? {};
-        // Don't break — keep scanning so the last trigger_output in execution order wins
+      } else if (out?._isWebhookResponse) {
+        // Pass the whole envelope through; the webhook handler unwraps it.
+        finalOutput = out;
       }
     }
 

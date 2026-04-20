@@ -366,18 +366,18 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     // Resolve each node's size in FLOW-COORDINATE space. xyflow v12's
     // `node.measured` + top-level `node.width/height` are both stored in
     // flow coords (scaled independently of zoom). We deliberately do NOT
-    // fall back to `getBoundingClientRect()` here — that returns screen
-    // pixels, and mixing them with `n.position` (flow coords) blew the
-    // bounding box out of proportion on zoomed-in canvases. If xyflow
-    // hasn't measured a node yet we just use a modest default; the
-    // resulting group can be nudged via the Width / Height inputs.
+    // fall back to `getBoundingClientRect()` — that returns screen pixels,
+    // and mixing them with `n.position` (flow coords) blew the bounding
+    // box out of proportion on zoomed-in canvases.
     //
-    // The per-node cap protects against stale / oversized measurements
-    // (e.g. a node that briefly rendered wider due to a long inline preview):
-    // no single child should force the group wider than NODE_MAX_W even if
-    // xyflow reports a huge measurement.
-    const NODE_MAX_W = 520;
-    const NODE_MAX_H = 260;
+    // Per-node caps tightened to match the actual styling of the 50+ built-
+    // in node kinds, which render at 200–340px wide. Even Custom Code with
+    // a long first-line preview caps around 320px due to CSS truncation.
+    // A hard 360×180 ceiling keeps one outlier child from stretching the
+    // group's dotted border past the visible node edge. Users can still
+    // nudge width/height manually via the Group form if they hit the cap.
+    const NODE_MAX_W = 360;
+    const NODE_MAX_H = 180;
     const measure = (n: FlowNode): { w: number; h: number } => {
       type Measurable = FlowNode & {
         measured?: { width?: number; height?: number };
@@ -393,8 +393,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         h = n.height;
       }
       return {
-        w: Math.min(NODE_MAX_W, Math.max(1, w ?? 260)),
-        h: Math.min(NODE_MAX_H, Math.max(1, h ?? 100)),
+        w: Math.min(NODE_MAX_W, Math.max(1, w ?? 240)),
+        h: Math.min(NODE_MAX_H, Math.max(1, h ?? 90)),
       };
     };
 

@@ -99,6 +99,38 @@ inboundWebhookRouter.all("/*", async (req: Request, res: Response) => {
       query: req.query as Record<string, unknown>,
     });
 
+    // If the workflow contains a Response node, wait for the run to finish
+    // and replay the node's status + headers + body to the external caller.
+    // When the workflow doesn't emit a Response (or times out) we fall back
+    // to the fire-and-forget {received} reply so non-responsive webhooks
+    // still acknowledge the POST.
+    if (execution.temporalWorkflowId) {
+      const wr = await webhookService.waitForWebhookResponse(
+        execution.temporalWorkflowId,
+        30_000,
+      );
+      if (wr) {
+        for (const [k, v] of Object.entries(wr.headers)) {
+          res.setHeader(k, v);
+        }
+        res.setHeader("Content-Type", wr.contentType);
+
+        // body is usually an interpolated template string. Try JSON.parse
+        // so object bodies round-trip as JSON; if parse fails, send raw.
+        let payload: unknown = wr.body;
+        if (typeof payload === "string") {
+          try {
+            payload = JSON.parse(payload);
+          } catch {
+            res.status(wr.statusCode).send(payload);
+            return;
+          }
+        }
+        res.status(wr.statusCode).json(payload ?? null);
+        return;
+      }
+    }
+
     res.status(200).json({
       received: true,
       executionId: execution.id,
