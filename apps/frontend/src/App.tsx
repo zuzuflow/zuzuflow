@@ -1,5 +1,9 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import {
+  createBrowserRouter,
+  RouterProvider,
+  Navigate,
+} from "react-router-dom";
 import { useApiConfigStore } from "./store/apiConfigStore";
 import { AppShell } from "./components/layout/AppShell";
 import { WorkflowsPage } from "./pages/WorkflowsPage";
@@ -24,56 +28,61 @@ function AuthGuard({
   return children;
 }
 
+// Uses createBrowserRouter (the data router) instead of the classic
+// <BrowserRouter> + <Routes> pair. The only functional difference for us is
+// that useBlocker() works — which is what the UnsavedChangesGuard relies on
+// to intercept navigation when the editor has unsaved changes. Every
+// pre-existing hook (useNavigate, useParams, useLocation, Link, NavLink)
+// behaves identically under the data router.
+const router = createBrowserRouter([
+  // ── Public ─────────────────────────────────────────────────────────────
+  { path: "/login", element: <LoginPage /> },
+  { path: "/signup", element: <SignupPage /> },
+  { path: "/invite/:token", element: <InviteAcceptPage /> },
+  {
+    path: "/mfa-setup",
+    element: (
+      <AuthGuard>
+        <MfaEnrollmentPage />
+      </AuthGuard>
+    ),
+  },
+
+  // Authenticated but no org selected yet
+  { path: "/org-picker", element: <OrgPickerPage /> },
+
+  // ── Protected with sidebar shell ───────────────────────────────────────
+  // Layout route — AppShell renders an <Outlet /> for the matched child.
+  {
+    element: (
+      <AuthGuard>
+        <AppShell />
+      </AuthGuard>
+    ),
+    children: [
+      // `/` redirects to /dashboard — the app's real home screen.
+      { path: "/", element: <Navigate to="/dashboard" replace /> },
+      { path: "/dashboard", element: <DashboardPage /> },
+      { path: "/workflows", element: <WorkflowsPage /> },
+      { path: "/credentials", element: <CredentialsPage /> },
+      { path: "/logs", element: <LogsPage /> },
+      { path: "/settings", element: <SettingsPage /> },
+    ],
+  },
+
+  // Protected full-bleed (no sidebar)
+  {
+    path: "/editor/:id",
+    element: (
+      <AuthGuard>
+        <WorkflowEditorPage />
+      </AuthGuard>
+    ),
+  },
+
+  { path: "*", element: <Navigate to="/" replace /> },
+]);
+
 export default function App(): React.ReactElement {
-  return (
-    <BrowserRouter>
-      <Routes>
-        {/* Public */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
-        <Route path="/invite/:token" element={<InviteAcceptPage />} />
-        <Route
-          path="/mfa-setup"
-          element={
-            <AuthGuard>
-              <MfaEnrollmentPage />
-            </AuthGuard>
-          }
-        />
-
-        {/* Authenticated but no org selected yet */}
-        <Route path="/org-picker" element={<OrgPickerPage />} />
-
-        {/* Protected with sidebar shell */}
-        <Route
-          element={
-            <AuthGuard>
-              <AppShell />
-            </AuthGuard>
-          }
-        >
-          {/* `/` redirects to /dashboard — the app's real home screen.
-              `/workflows` is the list page (was previously mounted on `/`). */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/workflows" element={<WorkflowsPage />} />
-          <Route path="/credentials" element={<CredentialsPage />} />
-          <Route path="/logs" element={<LogsPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-        </Route>
-
-        {/* Protected full-bleed (no sidebar) */}
-        <Route
-          path="/editor/:id"
-          element={
-            <AuthGuard>
-              <WorkflowEditorPage />
-            </AuthGuard>
-          }
-        />
-
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
-  );
+  return <RouterProvider router={router} />;
 }

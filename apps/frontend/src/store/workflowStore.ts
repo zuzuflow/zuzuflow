@@ -363,30 +363,39 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const PADDING = 40;
     const HEADER = 28; // extra top padding for the label chip
 
-    // Resolve each node's on-screen size. xyflow exposes `measured.width`
-    // after the DOM paints. If that's missing (rare but possible for a node
-    // freshly dropped and immediately grouped) fall back to the node's
-    // top-level `width`, then the actual DOM rect, then a generous default
-    // — 240px was too narrow; many nodes render 320–400px wide once filled
-    // in, causing the group frame to be cut short and children to visually
-    // leak outside the dotted border.
+    // Resolve each node's size in FLOW-COORDINATE space. xyflow v12's
+    // `node.measured` + top-level `node.width/height` are both stored in
+    // flow coords (scaled independently of zoom). We deliberately do NOT
+    // fall back to `getBoundingClientRect()` here — that returns screen
+    // pixels, and mixing them with `n.position` (flow coords) blew the
+    // bounding box out of proportion on zoomed-in canvases. If xyflow
+    // hasn't measured a node yet we just use a modest default; the
+    // resulting group can be nudged via the Width / Height inputs.
+    //
+    // The per-node cap protects against stale / oversized measurements
+    // (e.g. a node that briefly rendered wider due to a long inline preview):
+    // no single child should force the group wider than NODE_MAX_W even if
+    // xyflow reports a huge measurement.
+    const NODE_MAX_W = 520;
+    const NODE_MAX_H = 260;
     const measure = (n: FlowNode): { w: number; h: number } => {
-      type Measurable = FlowNode & { measured?: { width?: number; height?: number } };
+      type Measurable = FlowNode & {
+        measured?: { width?: number; height?: number };
+      };
       const m = (n as Measurable).measured;
-      if (m?.width && m?.height) return { w: m.width, h: m.height };
-      if (n.width && n.height) return { w: n.width, h: n.height };
-      if (typeof document !== "undefined") {
-        const el = document.querySelector<HTMLElement>(
-          `.react-flow__node[data-id="${CSS.escape(n.id)}"]`,
-        );
-        if (el) {
-          const rect = el.getBoundingClientRect();
-          if (rect.width > 0 && rect.height > 0) {
-            return { w: rect.width, h: rect.height };
-          }
-        }
+      let w: number | undefined;
+      let h: number | undefined;
+      if (m?.width && m?.height) {
+        w = m.width;
+        h = m.height;
+      } else if (n.width && n.height) {
+        w = n.width;
+        h = n.height;
       }
-      return { w: 320, h: 120 };
+      return {
+        w: Math.min(NODE_MAX_W, Math.max(1, w ?? 260)),
+        h: Math.min(NODE_MAX_H, Math.max(1, h ?? 100)),
+      };
     };
 
     let minX = Infinity,

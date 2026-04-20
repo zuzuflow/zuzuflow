@@ -10,6 +10,7 @@ import { useWorkflowStore } from "../store/workflowStore";
 import { useExecutionStore } from "../store/executionStore";
 import { AiBuilderFab } from "../components/ai/AiBuilderFab";
 import { CustomNodeBuilder } from "../components/custom-nodes/CustomNodeBuilder";
+import { UnsavedChangesGuard } from "../components/guards/UnsavedChangesGuard";
 import { useCanvasShortcuts } from "../hooks/useCanvasShortcuts";
 import * as api from "../lib/api";
 
@@ -170,6 +171,7 @@ export function WorkflowEditorPage(): React.ReactElement {
 
       <ExecutionLog />
       <AiBuilderFab />
+      <UnsavedChangesGuard />
       <CustomNodeBuilder
         open={builderOpen}
         onClose={() => setBuilderOpen(false)}
