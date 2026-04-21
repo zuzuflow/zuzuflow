@@ -67,6 +67,7 @@ import { AwsSecretsManagerForm } from "./forms/AwsSecretsManagerForm";
 import { AwsSsmForm } from "./forms/AwsSsmForm";
 import { AwsEventBridgeForm } from "./forms/AwsEventBridgeForm";
 import { AwsStepFunctionsForm } from "./forms/AwsStepFunctionsForm";
+import { AzureBlobForm } from "./forms/AzureBlobForm";
 
 import type {
   ManualTriggerConfig,
@@ -124,6 +125,7 @@ import type {
   AwsSsmConfig,
   AwsEventBridgeConfig,
   AwsStepFunctionsConfig,
+  AzureBlobConfig,
   AiAgentConfig,
 } from "@workflow/shared";
 
@@ -523,6 +525,13 @@ function renderForm(
         <AwsStepFunctionsForm
           config={config as AwsStepFunctionsConfig}
           onChange={onChange as (p: Partial<AwsStepFunctionsConfig>) => void}
+        />
+      );
+    case "azure_blob":
+      return (
+        <AzureBlobForm
+          config={config as AzureBlobConfig}
+          onChange={onChange as (p: Partial<AzureBlobConfig>) => void}
         />
       );
     default:

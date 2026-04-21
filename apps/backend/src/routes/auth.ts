@@ -1042,6 +1042,9 @@ AI:
 CODE:
 - "js_runner": Run JavaScript. Config: { "code": "return data;" }
 
+AZURE CLOUD:
+- "azure_blob": Azure Blob Storage. Config: { "credentialId": "", "operation": "uploadBlob" | "downloadBlob" | "listBlobs" | "deleteBlob" | "getBlobProperties", "container": "my-container", "blob": "path/to/blob.json", "content": "{{input.body}}", "contentType": "application/json", "prefix": "folder/", "maxResults": 100 }
+
 LAYOUT RULES (enterprise-grade — treat this as non-negotiable):
 
 Pick ONE layout direction and apply it uniformly to EVERY node in the graph.

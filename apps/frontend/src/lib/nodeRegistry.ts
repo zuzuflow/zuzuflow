@@ -59,6 +59,7 @@ import type {
   AwsSsmConfig,
   AwsEventBridgeConfig,
   AwsStepFunctionsConfig,
+  AzureBlobConfig,
 } from "@workflow/shared";
 
 // =============================================================================
@@ -73,7 +74,11 @@ export type NodeCategory =
   | "communication" // #7F56D9 purple
   | "ai_agents" // #F9D923 yellow
   | "code" // #3178c6 blue
-  | "cloud"; // #FF9900 AWS orange
+  | "cloud" // #FF9900 AWS orange (legacy — AWS nodes)
+  | "cloud_azure" // #0078d4 Microsoft blue
+  | "cloud_gcp" // #4285f4 Google blue
+  | "cloud_oracle" // #c74634 Oracle red
+  | "integrations"; // #635bff indigo — SaaS natives (Stripe/GitHub/Notion/...)
 
 export const CATEGORY_COLOR: Record<NodeCategory, string> = {
   trigger: "#7c3aed",
@@ -84,6 +89,10 @@ export const CATEGORY_COLOR: Record<NodeCategory, string> = {
   ai_agents: "#F9D923",
   code: "#3178c6",
   cloud: "#FF9900",
+  cloud_azure: "#0078d4",
+  cloud_gcp: "#4285f4",
+  cloud_oracle: "#c74634",
+  integrations: "#635bff",
 };
 
 export interface HandleDef {
@@ -358,6 +367,14 @@ const defaultAwsEventBridgeConfig: AwsEventBridgeConfig = {
 const defaultAwsStepFunctionsConfig: AwsStepFunctionsConfig = {
   operation: "startExecution",
   stateMachineArn: "",
+};
+
+const defaultAzureBlobConfig: AzureBlobConfig = {
+  operation: "uploadBlob",
+  container: "",
+  blob: "",
+  contentType: "application/json",
+  maxResults: 100,
 };
 
 const defaultLlmConfig: LlmPromptConfig = {
@@ -1078,6 +1095,19 @@ export const nodeRegistry: Record<NodeKind, NodeRegistryEntry> = {
     defaultConfig: defaultAwsStepFunctionsConfig,
     handles: ACTION_HANDLES,
   },
+
+  // ── AZURE CLOUD ────────────────────────────────────────────────────────────
+
+  azure_blob: {
+    label: "Azure Blob Storage",
+    category: "cloud_azure",
+    color: "#0078d4",
+    icon: "HardDrive",
+    description: "Upload, download, list, or delete blobs in Azure Storage",
+    defaultLabel: "Azure Blob",
+    defaultConfig: defaultAzureBlobConfig,
+    handles: ACTION_HANDLES,
+  },
 };
 
 // =============================================================================
@@ -1096,7 +1126,11 @@ export const NODE_CATEGORIES: {
   { id: "communication", label: "Communication", color: "#7F56D9" },
   { id: "ai_agents", label: "AI Agents", color: "#F9D923" },
   { id: "code", label: "Code", color: "#3178c6" },
-  { id: "cloud", label: "Cloud (AWS)", color: "#FF9900" },
+  { id: "cloud", label: "AWS", color: "#FF9900" },
+  { id: "cloud_azure", label: "Azure", color: "#0078d4" },
+  { id: "cloud_gcp", label: "Google Cloud", color: "#4285f4" },
+  { id: "cloud_oracle", label: "Oracle Cloud", color: "#c74634" },
+  { id: "integrations", label: "Integrations", color: "#635bff" },
 ];
 
 export function getNodesByCategory(category: NodeCategory): NodeKind[] {

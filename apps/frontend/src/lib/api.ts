@@ -1016,6 +1016,7 @@ export type CredentialKind =
   | "webhook_basic"
   | "webhook_jwt"
   | "aws"
+  | "azure"
   | "google_sheets"
   | "firebase"
   | "apns"

@@ -94,6 +94,8 @@ const nodeKindSchema = z.enum([
   "aws_ssm",
   "aws_eventbridge",
   "aws_step_functions",
+  // Azure Cloud
+  "azure_blob",
 ]);
 
 const handlePositionEnum = z.enum(["left", "right", "top", "bottom"]);

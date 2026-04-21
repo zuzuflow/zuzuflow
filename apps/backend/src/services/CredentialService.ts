@@ -69,6 +69,7 @@ export const CREDENTIAL_KINDS = [
   "webhook_basic",
   "webhook_jwt",
   "aws",
+  "azure",
   "google_sheets",
   "firebase",
   "apns",

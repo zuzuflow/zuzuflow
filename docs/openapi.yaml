@@ -61,20 +61,28 @@ components:
           format: uuid
         kind:
           type: string
-          enum:
-            - manual
-            - webhook
-            - cron
-            - mqtt_trigger
-            - if_else
-            - switch
-            - delay
-            - merge
-            - http_request
-            - send_email
-            - postgres_query
-            - custom_code
-            - debug
+          description: |
+            Discriminator for `config`. The canonical list lives in
+            `packages/shared/src/types/workflow.ts` — any kind declared there
+            is accepted by the API.
+            Notable ones:
+              * `manual` — "Immediate" trigger. Runs the workflow on demand.
+                Config `{ value?: string, valueType?: "string"|"number"|"boolean"|"json" }`.
+                When the caller passes an explicit `triggerPayload` the payload
+                wins; otherwise the configured `value` is coerced by `valueType`
+                and used as the trigger's output.
+              * `custom_builder` — user-authored node from the in-app Custom
+                Node Builder (see `docs/CUSTOM_NODES.md`). Config carries a
+                full template snapshot so workflows are self-contained.
+              * `group` — canvas-only container that visually groups child
+                nodes. Has no execution semantics: children declare their
+                parent via `parentId` and the GraphInterpreter no-ops the kind.
+              * `azure_blob` — Azure Blob Storage (uploadBlob / downloadBlob /
+                listBlobs / deleteBlob / getBlobProperties). First-class Azure
+                Cloud node; credential payload accepts connection string,
+                (accountName + accountKey), or (accountName + sasToken).
+                More Azure / GCP / Oracle Cloud natives are in progress — see
+                the roadmap for the full Phase 1 list.
           example: http_request
         label:
           type: string
@@ -88,6 +96,33 @@ components:
           properties:
             x: { type: number }
             y: { type: number }
+          description: |
+            World-space position for free nodes; parent-relative for nodes
+            inside a group (i.e. whose `parentId` is set).
+        parentId:
+          type: string
+          description: |
+            When set, points at a `group` node. The canvas renders this node
+            nested inside the group and freezes it if the group is locked.
+            Position becomes parent-relative while `parentId` is set.
+          example: "grp_a7b3k"
+        style:
+          type: object
+          description: |
+            Per-node visual overrides (header colour, Lucide icon name, and
+            handle positions for enterprise-grade LR layouts).
+          properties:
+            headerColor: { type: string }
+            icon: { type: string }
+            handlePositions:
+              type: object
+              properties:
+                input:
+                  type: string
+                  enum: [left, right, top, bottom]
+                output:
+                  type: string
+                  enum: [left, right, top, bottom]
 
     WorkflowEdge:
       type: object
@@ -594,7 +629,12 @@ paths:
                   format: uuid
                 triggerPayload:
                   type: object
-                  description: Arbitrary JSON passed as the trigger node's output
+                  description: |
+                    Arbitrary JSON passed as the trigger node's output. For
+                    an **Immediate** (`kind: manual`) trigger, a non-empty
+                    payload here overrides the node's configured `value`; an
+                    empty payload lets the configured value flow through
+                    instead (coerced by `valueType`).
       responses:
         "201":
           description: Execution started

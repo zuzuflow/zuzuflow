@@ -21,6 +21,7 @@
     "@aws-sdk/client-sqs": "^3.1030.0",
     "@aws-sdk/client-ssm": "^3.1030.0",
     "@aws-sdk/util-dynamodb": "^3.996.2",
+    "@azure/storage-blob": "^12.24.0",
     "@sendgrid/mail": "^8.1.6",
     "@temporalio/activity": "^1.10.3",
     "@temporalio/client": "^1.10.3",

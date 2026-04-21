@@ -73,7 +73,9 @@ export type NodeKind =
   | "aws_secrets_manager"
   | "aws_ssm"
   | "aws_eventbridge"
-  | "aws_step_functions";
+  | "aws_step_functions"
+  // ── Azure Cloud ──────────────────────────────────────────────────────────────
+  | "azure_blob";
 
 // =============================================================================
 // Trigger node configs
@@ -1011,6 +1013,43 @@ export interface AwsStepFunctionsConfig extends AwsBaseConfig {
 }
 
 // =============================================================================
+// Azure Cloud node configs
+// =============================================================================
+
+export type AzureBlobOperation =
+  | "uploadBlob"
+  | "downloadBlob"
+  | "listBlobs"
+  | "deleteBlob"
+  | "getBlobProperties";
+
+/**
+ * Azure Blob Storage — S3-equivalent object store for Azure. The credential's
+ * decrypted payload should carry either:
+ *   - `{ connectionString: string }` — fastest to configure, carries account
+ *     name + key + endpoint in one blob. Recommended for getting started.
+ *   - `{ accountName, accountKey }` — shared-key auth.
+ *   - `{ accountName, sasToken }` — time-limited SAS access.
+ * The activity picks the first credential shape that resolves.
+ */
+export interface AzureBlobConfig {
+  credentialId?: string;
+  operation: AzureBlobOperation;
+  /** Container name — supports {{}} interpolation */
+  container: string;
+  /** Blob name — supports {{}} interpolation (not required for listBlobs) */
+  blob?: string;
+  /** Body for uploadBlob — supports {{}} interpolation */
+  content?: string;
+  /** MIME type for uploadBlob, e.g. "application/json" */
+  contentType?: string;
+  /** Prefix filter for listBlobs — supports {{}} interpolation */
+  prefix?: string;
+  /** Max results for listBlobs (default 100, max 5000) */
+  maxResults?: number;
+}
+
+// =============================================================================
 // Union of all node configs
 // =============================================================================
 
@@ -1081,7 +1120,9 @@ export type NodeConfig =
   | AwsSecretsManagerConfig
   | AwsSsmConfig
   | AwsEventBridgeConfig
-  | AwsStepFunctionsConfig;
+  | AwsStepFunctionsConfig
+  // Azure Cloud
+  | AzureBlobConfig;
 
 // =============================================================================
 // Graph primitives

@@ -83,6 +83,7 @@ import { AwsSecretsManagerNode } from "../nodes/AwsSecretsManagerNode";
 import { AwsSsmNode } from "../nodes/AwsSsmNode";
 import { AwsEventBridgeNode } from "../nodes/AwsEventBridgeNode";
 import { AwsStepFunctionsNode } from "../nodes/AwsStepFunctionsNode";
+import { AzureBlobNode } from "../nodes/AzureBlobNode";
 import type {
   SubworkflowCallConfig,
   CustomBuilderConfig,
@@ -154,6 +155,7 @@ const nodeTypes = {
   aws_ssm: AwsSsmNode,
   aws_eventbridge: AwsEventBridgeNode,
   aws_step_functions: AwsStepFunctionsNode,
+  azure_blob: AzureBlobNode,
 };
 
 const edgeTypes: EdgeTypes = {

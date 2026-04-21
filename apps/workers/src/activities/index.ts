@@ -164,5 +164,8 @@ export type { AwsEventBridgeActivityInput } from "./aws_eventbridge";
 export { awsStepFunctionsActivity } from "./aws_step_functions";
 export type { AwsStepFunctionsActivityInput } from "./aws_step_functions";
 
+export { azureBlobActivity } from "./azure_blob";
+export type { AzureBlobActivityInput } from "./azure_blob";
+
 export { aiAgentActivity } from "./aiAgent";
 export type { AiAgentActivityInput, AiAgentActivityOutput } from "./aiAgent";

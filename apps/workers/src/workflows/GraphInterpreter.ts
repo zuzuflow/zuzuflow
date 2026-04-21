@@ -86,6 +86,7 @@ import type {
   AwsSsmConfig,
   AwsEventBridgeConfig,
   AwsStepFunctionsConfig,
+  AzureBlobConfig,
   WorkflowSettings,
 } from "@workflow/shared";
 
@@ -148,6 +149,7 @@ import type { AwsSecretsManagerActivityInput } from "../activities/aws_secrets_m
 import type { AwsSsmActivityInput } from "../activities/aws_ssm";
 import type { AwsEventBridgeActivityInput } from "../activities/aws_eventbridge";
 import type { AwsStepFunctionsActivityInput } from "../activities/aws_step_functions";
+import type { AzureBlobActivityInput } from "../activities/azure_blob";
 
 // =============================================================================
 // Activity type map — used by proxyActivities inside the workflow function
@@ -228,6 +230,7 @@ type ActivityMap = {
   awsStepFunctionsActivity(
     input: AwsStepFunctionsActivityInput,
   ): Promise<unknown>;
+  azureBlobActivity(input: AzureBlobActivityInput): Promise<unknown>;
 };
 
 // =============================================================================
@@ -490,6 +493,7 @@ export async function graphInterpreterWorkflow(
     awsSsmActivity,
     awsEventBridgeActivity,
     awsStepFunctionsActivity,
+    azureBlobActivity,
   } = proxyActivities<ActivityMap>({
     startToCloseTimeout: ws.activityStartToCloseTimeout ?? "5 minutes",
     ...(ws.activityScheduleToStartTimeout
@@ -1953,6 +1957,37 @@ export async function graphInterpreterWorkflow(
               };
             }
             nodeOutput = await awsStepFunctionsActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials,
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Azure Blob Storage
+          // ------------------------------------------------------------------
+          case "azure_blob": {
+            const cfg = node.config as AzureBlobConfig;
+            let resolvedCredentials:
+              | {
+                  connectionString?: string;
+                  accountName?: string;
+                  accountKey?: string;
+                  sasToken?: string;
+                }
+              | undefined;
+            if (cfg.credentialId) {
+              const cred = await resolveCredentialActivity(cfg.credentialId);
+              resolvedCredentials = {
+                connectionString: cred.connectionString,
+                accountName: cred.accountName,
+                accountKey: cred.accountKey,
+                sasToken: cred.sasToken,
+              };
+            }
+            nodeOutput = await azureBlobActivity({
               config: cfg,
               context: nodeOutputs,
               resolvedCredentials,

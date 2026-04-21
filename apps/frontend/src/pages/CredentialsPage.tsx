@@ -164,6 +164,31 @@ const KIND_DEFS: Record<api.CredentialKind, { label: string; description: string
       { key: "region", label: "Region (optional)", placeholder: "us-east-1" },
     ],
   },
+  azure: {
+    label: "Azure",
+    description:
+      "Azure Storage / Service Bus / Cosmos credential. Supply EITHER a connection string OR (account name + access key) OR (account name + SAS token). The first non-empty shape wins at runtime.",
+    fields: [
+      {
+        key: "connectionString",
+        label: "Connection String",
+        placeholder: "DefaultEndpointsProtocol=https;AccountName=...",
+        secret: true,
+      },
+      {
+        key: "accountName",
+        label: "Account Name",
+        placeholder: "mystorageaccount",
+      },
+      { key: "accountKey", label: "Account Key", secret: true },
+      {
+        key: "sasToken",
+        label: "SAS Token",
+        placeholder: "?sv=2024-...&ss=b&srt=sco&sp=rwdlac",
+        secret: true,
+      },
+    ],
+  },
   google_sheets: {
     label: "Google Sheets",
     description: "Service account credentials for Google Sheets API",
@@ -251,6 +276,7 @@ const KIND_BADGE: Record<string, string> = {
   webhook_basic: "bg-amber-900 text-amber-300",
   webhook_jwt: "bg-sky-900 text-sky-300",
   aws: "bg-orange-900 text-orange-300",
+  azure: "bg-sky-900 text-sky-300",
   slack: "bg-purple-900 text-purple-300",
   ssh: "bg-slate-800 text-slate-300",
   twilio: "bg-red-900 text-red-300",
