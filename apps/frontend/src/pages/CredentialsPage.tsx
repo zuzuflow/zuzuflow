@@ -167,25 +167,136 @@ const KIND_DEFS: Record<api.CredentialKind, { label: string; description: string
   azure: {
     label: "Azure",
     description:
-      "Azure Storage / Service Bus / Cosmos credential. Supply EITHER a connection string OR (account name + access key) OR (account name + SAS token). The first non-empty shape wins at runtime.",
+      "Azure credential covering every Azure node in the catalogue. Supply EITHER a connection string (Storage / Service Bus), OR account name + access key / SAS (Storage), OR Cosmos DB endpoint + key, OR a Service Principal (tenantId + clientId + clientSecret) for Key Vault / Functions / generic REST. The activity picks the first non-empty shape that matches what the node needs.",
     fields: [
       {
         key: "connectionString",
-        label: "Connection String",
+        label: "Connection String (Storage / Service Bus / Cosmos)",
         placeholder: "DefaultEndpointsProtocol=https;AccountName=...",
         secret: true,
       },
       {
         key: "accountName",
-        label: "Account Name",
+        label: "Account Name (Storage)",
         placeholder: "mystorageaccount",
       },
-      { key: "accountKey", label: "Account Key", secret: true },
+      { key: "accountKey", label: "Account Key (Storage)", secret: true },
       {
         key: "sasToken",
-        label: "SAS Token",
+        label: "SAS Token (Storage)",
         placeholder: "?sv=2024-...&ss=b&srt=sco&sp=rwdlac",
         secret: true,
+      },
+      {
+        key: "cosmosEndpoint",
+        label: "Cosmos Endpoint",
+        placeholder: "https://mycosmos.documents.azure.com:443/",
+      },
+      {
+        key: "cosmosKey",
+        label: "Cosmos Primary Key",
+        secret: true,
+      },
+      {
+        key: "tenantId",
+        label: "Tenant ID (Service Principal)",
+        placeholder: "00000000-0000-0000-0000-000000000000",
+      },
+      {
+        key: "clientId",
+        label: "Client ID (Service Principal)",
+        placeholder: "00000000-0000-0000-0000-000000000000",
+      },
+      {
+        key: "clientSecret",
+        label: "Client Secret (Service Principal)",
+        secret: true,
+      },
+      {
+        key: "vaultUrl",
+        label: "Key Vault URL",
+        placeholder: "https://myvault.vault.azure.net",
+      },
+      {
+        key: "functionKey",
+        label: "Function Key (Azure Functions)",
+        secret: true,
+      },
+    ],
+  },
+  gcp: {
+    label: "Google Cloud",
+    description:
+      "Service account JSON for Google Cloud nodes (Storage / Pub/Sub / BigQuery). Use a least-privilege service account — download the JSON key from the GCP console and paste it here.",
+    fields: [
+      {
+        key: "serviceAccountJson",
+        label: "Service Account JSON",
+        placeholder: '{"type":"service_account","project_id":"...","private_key":"-----BEGIN..."}',
+        secret: true,
+      },
+      {
+        key: "projectId",
+        label: "Project ID (optional override)",
+        placeholder: "my-gcp-project",
+      },
+    ],
+  },
+  oracle: {
+    label: "Oracle Database",
+    description:
+      "Oracle DB connection — supports TNS connect strings, EZConnect, and Wallet-based auth. The activity uses node-oracledb's thin client by default; set walletLocation for Wallet auth.",
+    fields: [
+      { key: "user", label: "User", placeholder: "SYSTEM" },
+      { key: "password", label: "Password", secret: true },
+      {
+        key: "connectString",
+        label: "Connect String",
+        placeholder: "host:port/service_name  or  TNS alias",
+      },
+      {
+        key: "walletLocation",
+        label: "Wallet Location (optional)",
+        placeholder: "/path/to/wallet",
+      },
+      {
+        key: "walletPassword",
+        label: "Wallet Password (optional)",
+        secret: true,
+      },
+    ],
+  },
+  oci: {
+    label: "Oracle Cloud (OCI)",
+    description:
+      "OCI API signing key for Object Storage and other OCI services. Grab the fingerprint from the OCI console after uploading your public key; the private key is the PEM body.",
+    fields: [
+      {
+        key: "tenancy",
+        label: "Tenancy OCID",
+        placeholder: "ocid1.tenancy.oc1..aaaaaaaa...",
+      },
+      {
+        key: "user",
+        label: "User OCID",
+        placeholder: "ocid1.user.oc1..aaaaaaaa...",
+      },
+      {
+        key: "fingerprint",
+        label: "Key Fingerprint",
+        placeholder: "aa:bb:cc:dd:...",
+      },
+      {
+        key: "privateKey",
+        label: "Private Key (PEM)",
+        placeholder: "-----BEGIN RSA PRIVATE KEY-----",
+        secret: true,
+      },
+      { key: "region", label: "Region", placeholder: "us-ashburn-1" },
+      {
+        key: "namespace",
+        label: "Object Storage Namespace (optional)",
+        placeholder: "mynamespace",
       },
     ],
   },
@@ -250,6 +361,665 @@ const KIND_DEFS: Record<api.CredentialKind, { label: string; description: string
     description: "Hugging Face access token for inference API in LLM Prompt node",
     fields: [{ key: "apiToken", label: "Access Token", placeholder: "hf_...", secret: true }],
   },
+  stripe: {
+    label: "Stripe",
+    description:
+      "Stripe secret API key. Use a test key (sk_test_...) for development, live key (sk_live_...) for production.",
+    fields: [
+      {
+        key: "apiKey",
+        label: "Secret API Key",
+        placeholder: "sk_test_... / sk_live_...",
+        secret: true,
+      },
+    ],
+  },
+  github: {
+    label: "GitHub",
+    description:
+      "GitHub personal access token (classic `ghp_...` or fine-grained `github_pat_...`). Scope-minimise: typical flows need `repo` / `workflow` at most.",
+    fields: [
+      {
+        key: "token",
+        label: "Personal Access Token",
+        placeholder: "ghp_... / github_pat_...",
+        secret: true,
+      },
+    ],
+  },
+  discord: {
+    label: "Discord",
+    description:
+      "Either a webhook URL (for simple channel notifications) or a bot token (for arbitrary channel messages & reactions). Fill ONE — the activity picks what the selected operation needs.",
+    fields: [
+      {
+        key: "webhookUrl",
+        label: "Webhook URL",
+        placeholder:
+          "https://discord.com/api/webhooks/.../abc... (for webhook messages)",
+        secret: true,
+      },
+      {
+        key: "botToken",
+        label: "Bot Token",
+        placeholder: "(for bot-authenticated channel messages & reactions)",
+        secret: true,
+      },
+    ],
+  },
+  notion: {
+    label: "Notion",
+    description:
+      "Notion internal integration token. Create one at Settings → Connections → Develop or manage integrations, then share the target pages/databases with the integration.",
+    fields: [
+      {
+        key: "token",
+        label: "Integration Token",
+        placeholder: "secret_... / ntn_...",
+        secret: true,
+      },
+    ],
+  },
+  salesforce: {
+    label: "Salesforce",
+    description:
+      "Two auth shapes supported. Fill EITHER OAuth (instanceUrl + accessToken after your own OAuth handshake) OR classic SOAP login (loginUrl + username + password + security token).",
+    fields: [
+      {
+        key: "instanceUrl",
+        label: "Instance URL (OAuth)",
+        placeholder: "https://mycorp.my.salesforce.com",
+      },
+      {
+        key: "accessToken",
+        label: "Access Token (OAuth)",
+        secret: true,
+      },
+      {
+        key: "loginUrl",
+        label: "Login URL (SOAP, optional)",
+        placeholder: "https://login.salesforce.com (or https://test.salesforce.com for sandbox)",
+      },
+      { key: "username", label: "Username (SOAP)", placeholder: "you@example.com" },
+      { key: "password", label: "Password (SOAP)", secret: true },
+      {
+        key: "securityToken",
+        label: "Security Token (SOAP)",
+        secret: true,
+      },
+    ],
+  },
+  jira: {
+    label: "Jira Cloud",
+    description:
+      "Jira Cloud uses Basic auth with `email:apiToken`. Create an API token at id.atlassian.com → Security → Create and manage API tokens.",
+    fields: [
+      {
+        key: "baseUrl",
+        label: "Base URL",
+        placeholder: "https://mycorp.atlassian.net",
+      },
+      { key: "email", label: "Email", placeholder: "you@example.com" },
+      { key: "apiToken", label: "API Token", secret: true },
+    ],
+  },
+  ms_teams: {
+    label: "Microsoft Teams",
+    description:
+      "Microsoft Teams Incoming Webhook URL. Create in the target channel's connectors. Adaptive cards and text messages both POST to the same URL.",
+    fields: [
+      {
+        key: "webhookUrl",
+        label: "Incoming Webhook URL",
+        placeholder: "https://outlook.office.com/webhook/... or https://....webhook.office.com/webhookb2/...",
+        secret: true,
+      },
+    ],
+  },
+  hubspot: {
+    label: "HubSpot",
+    description:
+      "HubSpot Private App token (recommended — create under Settings → Integrations → Private Apps) or legacy API key.",
+    fields: [
+      {
+        key: "privateAppToken",
+        label: "Private App Token",
+        placeholder: "pat-na1-... (recommended)",
+        secret: true,
+      },
+      {
+        key: "apiKey",
+        label: "API Key (legacy, deprecated)",
+        secret: true,
+      },
+    ],
+  },
+  airtable: {
+    label: "Airtable",
+    description:
+      "Airtable Personal Access Token (PAT) or legacy API key. PATs are preferred — create at airtable.com/create/tokens with scopes `data.records:read`/`write` for the target base.",
+    fields: [
+      {
+        key: "apiKey",
+        label: "Personal Access Token / API Key",
+        placeholder: "pat... / key...",
+        secret: true,
+      },
+    ],
+  },
+  pagerduty: {
+    label: "PagerDuty",
+    description:
+      "Supply EITHER an Events API v2 routing key (integration key) for events.trigger/ack/resolve OR a REST API token for incidents.*. Operations pick the one they need.",
+    fields: [
+      {
+        key: "routingKey",
+        label: "Events API Routing Key",
+        placeholder: "32-char integration key",
+        secret: true,
+      },
+      {
+        key: "apiToken",
+        label: "REST API Token",
+        placeholder: "(General Access or User token)",
+        secret: true,
+      },
+    ],
+  },
+  gitlab: {
+    label: "GitLab",
+    description:
+      "GitLab Personal or Project Access Token. baseUrl defaults to https://gitlab.com — set it only for self-hosted instances.",
+    fields: [
+      {
+        key: "baseUrl",
+        label: "Base URL (optional)",
+        placeholder: "https://gitlab.com (or https://gitlab.mycorp.net)",
+      },
+      {
+        key: "token",
+        label: "Access Token",
+        placeholder: "glpat-...",
+        secret: true,
+      },
+    ],
+  },
+  linear: {
+    label: "Linear",
+    description:
+      "Linear Personal API Key from linear.app/settings/api. Sent as the raw Authorization header (not Bearer — Linear convention).",
+    fields: [
+      {
+        key: "apiKey",
+        label: "Personal API Key",
+        placeholder: "lin_api_...",
+        secret: true,
+      },
+    ],
+  },
+  telegram: {
+    label: "Telegram Bot",
+    description:
+      "Telegram Bot API token from @BotFather. Used as https://api.telegram.org/bot<token>/...",
+    fields: [
+      {
+        key: "botToken",
+        label: "Bot Token",
+        placeholder: "123456789:AA...",
+        secret: true,
+      },
+    ],
+  },
+  sentry: {
+    label: "Sentry",
+    description:
+      "Two auth shapes. For events.captureMessage/captureException fill DSN. For issues.list/resolve fill auth token + org + project slugs.",
+    fields: [
+      {
+        key: "dsn",
+        label: "DSN (for events)",
+        placeholder: "https://abc@o0.ingest.sentry.io/1234567",
+        secret: true,
+      },
+      {
+        key: "authToken",
+        label: "Auth Token (REST API)",
+        placeholder: "(Internal Integration or Auth Token)",
+        secret: true,
+      },
+      {
+        key: "organizationSlug",
+        label: "Organization Slug (REST API)",
+        placeholder: "my-org",
+      },
+      {
+        key: "projectSlug",
+        label: "Project Slug (REST API)",
+        placeholder: "backend",
+      },
+    ],
+  },
+  shopify: {
+    label: "Shopify",
+    description:
+      "Shopify Admin API access token + shop domain. Create a custom app from Settings → Apps and sales channels → Develop apps → API credentials.",
+    fields: [
+      {
+        key: "shopDomain",
+        label: "Shop Domain",
+        placeholder: "mystore.myshopify.com",
+      },
+      {
+        key: "accessToken",
+        label: "Admin API Access Token",
+        placeholder: "shpat_...",
+        secret: true,
+      },
+    ],
+  },
+  mailchimp: {
+    label: "Mailchimp",
+    description:
+      "Mailchimp Marketing API key. The key MUST include the data-center suffix (e.g. `abc123-us21`) — the activity parses the `us21` part to build the API URL.",
+    fields: [
+      {
+        key: "apiKey",
+        label: "API Key",
+        placeholder: "abc123def456-us21",
+        secret: true,
+      },
+    ],
+  },
+  google_drive_oauth: {
+    label: "Google Drive (OAuth token)",
+    description:
+      "Short-lived OAuth access token for Google Drive. Use the `gcp` credential kind for service account auth instead — this kind is for OAuth flows you handle outside the platform.",
+    fields: [
+      {
+        key: "accessToken",
+        label: "Access Token",
+        placeholder: "ya29...",
+        secret: true,
+      },
+    ],
+  },
+  dropbox: {
+    label: "Dropbox",
+    description:
+      "Dropbox API access token. Create one under App Console → your app → OAuth 2 → Generated access token. Long-lived PATs and short-lived tokens both work.",
+    fields: [
+      {
+        key: "accessToken",
+        label: "Access Token",
+        placeholder: "sl.Bxyz...",
+        secret: true,
+      },
+    ],
+  },
+  datadog: {
+    label: "Datadog",
+    description:
+      "Datadog API key (required). App key is needed only for a few REST endpoints. Site defaults to datadoghq.com — set it for EU (`datadoghq.eu`) or regional sites like `us3.datadoghq.com`.",
+    fields: [
+      {
+        key: "apiKey",
+        label: "API Key",
+        placeholder: "DD_API_KEY",
+        secret: true,
+      },
+      {
+        key: "appKey",
+        label: "Application Key (optional)",
+        placeholder: "DD_APP_KEY",
+        secret: true,
+      },
+      {
+        key: "site",
+        label: "Site (optional)",
+        placeholder: "datadoghq.com / datadoghq.eu / us3.datadoghq.com",
+      },
+    ],
+  },
+  paypal: {
+    label: "PayPal",
+    description:
+      "PayPal REST API client credentials from developer.paypal.com. Set `environment` to `sandbox` to hit the sandbox API; defaults to `live`.",
+    fields: [
+      { key: "clientId", label: "Client ID", placeholder: "A21AA..." },
+      { key: "clientSecret", label: "Client Secret", secret: true },
+      {
+        key: "environment",
+        label: "Environment",
+        placeholder: "live (default) / sandbox",
+      },
+    ],
+  },
+  square: {
+    label: "Square",
+    description:
+      "Square access token from the Developer Dashboard. Set `environment` to `sandbox` to use connect.squareupsandbox.com; defaults to `production`.",
+    fields: [
+      {
+        key: "accessToken",
+        label: "Access Token",
+        placeholder: "EAAA... (prod) / EAAAE... (sandbox)",
+        secret: true,
+      },
+      {
+        key: "environment",
+        label: "Environment",
+        placeholder: "production (default) / sandbox",
+      },
+    ],
+  },
+  resend: {
+    label: "Resend",
+    description:
+      "Resend API key (re_...) from resend.com/api-keys. Uses Bearer auth for the emails API.",
+    fields: [
+      {
+        key: "apiKey",
+        label: "API Key",
+        placeholder: "re_...",
+        secret: true,
+      },
+    ],
+  },
+  onedrive: {
+    label: "OneDrive",
+    description:
+      "OAuth access token for Microsoft Graph (Files.ReadWrite scope). Short-lived — refresh outside the platform and paste a fresh token as needed.",
+    fields: [
+      {
+        key: "accessToken",
+        label: "Access Token",
+        placeholder: "EwB...",
+        secret: true,
+      },
+    ],
+  },
+  box: {
+    label: "Box",
+    description:
+      "Box OAuth / JWT developer access token. For apps with user auth, use the access token issued by your OAuth flow; for server auth, use a JWT-minted token.",
+    fields: [
+      {
+        key: "accessToken",
+        label: "Access Token",
+        placeholder: "(Box access token)",
+        secret: true,
+      },
+    ],
+  },
+  circleci: {
+    label: "CircleCI",
+    description:
+      "CircleCI Personal API Token from circleci.com/user/tokens. Sent via the Circle-Token header.",
+    fields: [
+      {
+        key: "token",
+        label: "API Token",
+        placeholder: "(40-char token)",
+        secret: true,
+      },
+    ],
+  },
+  whatsapp_business: {
+    label: "WhatsApp Business",
+    description:
+      "Meta Graph access token + phone number ID from Meta for Developers → WhatsApp → API Setup. System-user tokens recommended for production.",
+    fields: [
+      {
+        key: "accessToken",
+        label: "Access Token",
+        placeholder: "EAAG...",
+        secret: true,
+      },
+      {
+        key: "phoneNumberId",
+        label: "Phone Number ID",
+        placeholder: "(numeric ID from the API Setup panel)",
+      },
+    ],
+  },
+  pipedrive: {
+    label: "Pipedrive",
+    description:
+      "Pipedrive API token + company domain. companyDomain is the subdomain part of `<companyDomain>.pipedrive.com`.",
+    fields: [
+      {
+        key: "apiToken",
+        label: "API Token",
+        placeholder: "(from Personal preferences → API)",
+        secret: true,
+      },
+      {
+        key: "companyDomain",
+        label: "Company Domain",
+        placeholder: "mycorp (from mycorp.pipedrive.com)",
+      },
+    ],
+  },
+  customer_io: {
+    label: "Customer.io",
+    description:
+      "Track API: siteId + apiKey (Basic auth). App API (for sendTransactional): appApiKey (Bearer). Set `region` to `eu` for the EU data residency endpoints.",
+    fields: [
+      {
+        key: "siteId",
+        label: "Site ID (Track API)",
+        placeholder: "abc123",
+      },
+      {
+        key: "apiKey",
+        label: "Track API Key",
+        placeholder: "(Track API key)",
+        secret: true,
+      },
+      {
+        key: "appApiKey",
+        label: "App API Key (transactional)",
+        placeholder: "(App API key)",
+        secret: true,
+      },
+      {
+        key: "region",
+        label: "Region (optional)",
+        placeholder: "us (default) / eu",
+      },
+    ],
+  },
+  kafka: {
+    label: "Kafka",
+    description:
+      "Kafka broker connection. `brokers` is a CSV list `host1:9092,host2:9092`. SASL + SSL are optional — set `sasl` to `true` and fill `saslMechanism` / username / password for authenticated clusters (Confluent Cloud, MSK IAM, etc.).",
+    fields: [
+      {
+        key: "brokers",
+        label: "Brokers (CSV)",
+        placeholder: "broker1:9092,broker2:9092",
+      },
+      {
+        key: "clientId",
+        label: "Client ID (optional)",
+        placeholder: "zuzuflow",
+      },
+      {
+        key: "ssl",
+        label: "SSL (true / false)",
+        placeholder: "true",
+      },
+      {
+        key: "sasl",
+        label: "SASL enabled (true / false)",
+        placeholder: "true",
+      },
+      {
+        key: "saslMechanism",
+        label: "SASL Mechanism",
+        placeholder: "plain / scram-sha-256 / scram-sha-512",
+      },
+      { key: "username", label: "SASL Username" },
+      { key: "password", label: "SASL Password", secret: true },
+    ],
+  },
+  nats: {
+    label: "NATS",
+    description:
+      "NATS / JetStream connection. `servers` is a CSV list. Supply EITHER `token` OR `user` + `pass` for authenticated servers.",
+    fields: [
+      {
+        key: "servers",
+        label: "Servers (CSV)",
+        placeholder: "nats://localhost:4222",
+      },
+      { key: "user", label: "User (optional)" },
+      { key: "pass", label: "Password (optional)", secret: true },
+      { key: "token", label: "Token (optional)", secret: true },
+    ],
+  },
+  snowflake: {
+    label: "Snowflake",
+    description:
+      "Snowflake account + username + (password OR privateKey). `account` is the locator like `xy12345.us-east-1`. Optional defaults for database/schema/warehouse/role can be overridden per-node.",
+    fields: [
+      {
+        key: "account",
+        label: "Account locator",
+        placeholder: "xy12345.us-east-1",
+      },
+      { key: "username", label: "Username" },
+      { key: "password", label: "Password (choose one)", secret: true },
+      {
+        key: "privateKey",
+        label: "Private Key PEM (key-pair auth)",
+        secret: true,
+      },
+      { key: "database", label: "Default Database (optional)" },
+      { key: "schema", label: "Default Schema (optional)" },
+      { key: "warehouse", label: "Default Warehouse (optional)" },
+      { key: "role", label: "Default Role (optional)" },
+    ],
+  },
+  clickhouse: {
+    label: "ClickHouse",
+    description:
+      "ClickHouse HTTP interface URL + optional credentials. URL looks like `http://localhost:8123` or `https://<cluster>.clickhouse.cloud`.",
+    fields: [
+      {
+        key: "url",
+        label: "URL",
+        placeholder: "https://my-cluster.clickhouse.cloud",
+      },
+      { key: "username", label: "Username (optional)", placeholder: "default" },
+      { key: "password", label: "Password (optional)", secret: true },
+      { key: "database", label: "Default Database (optional)" },
+    ],
+  },
+  elasticsearch: {
+    label: "Elasticsearch",
+    description:
+      "Elasticsearch node URL + auth. Supply EITHER `apiKey` OR `username` + `password`. Paste CA cert (PEM) for self-signed clusters.",
+    fields: [
+      {
+        key: "node",
+        label: "Node URL",
+        placeholder: "https://localhost:9200",
+      },
+      { key: "apiKey", label: "API Key (recommended)", secret: true },
+      { key: "username", label: "Username (alternative)" },
+      { key: "password", label: "Password (alternative)", secret: true },
+      { key: "ca", label: "CA cert PEM (optional)", secret: true },
+    ],
+  },
+  stability: {
+    label: "Stability AI",
+    description:
+      "Stability AI API key from platform.stability.ai. Used by the AI Image node when provider=stability.",
+    fields: [
+      {
+        key: "apiKey",
+        label: "API Key",
+        placeholder: "sk-...",
+        secret: true,
+      },
+    ],
+  },
+  assemblyai: {
+    label: "AssemblyAI",
+    description:
+      "AssemblyAI API key from assemblyai.com. Used by AI Transcribe when provider=assemblyai.",
+    fields: [
+      {
+        key: "apiKey",
+        label: "API Key",
+        secret: true,
+      },
+    ],
+  },
+  elevenlabs: {
+    label: "ElevenLabs",
+    description:
+      "ElevenLabs xi-api-key from elevenlabs.io. Used by AI TTS when provider=elevenlabs.",
+    fields: [
+      {
+        key: "apiKey",
+        label: "API Key",
+        secret: true,
+      },
+    ],
+  },
+  cohere: {
+    label: "Cohere",
+    description:
+      "Cohere production API key from dashboard.cohere.com. Used by AI Embed when provider=cohere.",
+    fields: [
+      {
+        key: "apiKey",
+        label: "API Key",
+        secret: true,
+      },
+    ],
+  },
+  pinecone: {
+    label: "Pinecone",
+    description:
+      "Pinecone API key + per-index host URL. `indexHost` looks like `my-index-abc123.svc.aped-xxxx.pinecone.io` — you'll find it on the index detail page.",
+    fields: [
+      { key: "apiKey", label: "API Key", secret: true },
+      {
+        key: "indexHost",
+        label: "Index Host URL",
+        placeholder: "https://my-index-abc.svc.aped-xxxx.pinecone.io",
+      },
+    ],
+  },
+  weaviate: {
+    label: "Weaviate",
+    description:
+      "Weaviate cluster URL + optional API key (required for Weaviate Cloud, optional for self-hosted).",
+    fields: [
+      {
+        key: "url",
+        label: "Cluster URL",
+        placeholder: "https://my-cluster.weaviate.network",
+      },
+      { key: "apiKey", label: "API Key (optional)", secret: true },
+    ],
+  },
+  qdrant: {
+    label: "Qdrant",
+    description:
+      "Qdrant URL + optional API key (required for Qdrant Cloud). Self-hosted can run without one.",
+    fields: [
+      {
+        key: "url",
+        label: "URL",
+        placeholder: "https://my-cluster.qdrant.io:6333",
+      },
+      { key: "apiKey", label: "API Key (optional)", secret: true },
+    ],
+  },
   generic: {
     label: "Generic / Custom",
     description: "Free-form key-value pairs, resolved at runtime",
@@ -277,6 +1047,9 @@ const KIND_BADGE: Record<string, string> = {
   webhook_jwt: "bg-sky-900 text-sky-300",
   aws: "bg-orange-900 text-orange-300",
   azure: "bg-sky-900 text-sky-300",
+  gcp: "bg-blue-900 text-blue-300",
+  oracle: "bg-red-900 text-red-300",
+  oci: "bg-red-900 text-red-300",
   slack: "bg-purple-900 text-purple-300",
   ssh: "bg-slate-800 text-slate-300",
   twilio: "bg-red-900 text-red-300",
@@ -289,6 +1062,46 @@ const KIND_BADGE: Record<string, string> = {
   anthropic: "bg-orange-900 text-orange-300",
   gemini: "bg-blue-900 text-blue-300",
   huggingface: "bg-yellow-900 text-yellow-300",
+  stripe: "bg-violet-900 text-violet-300",
+  github: "bg-slate-800 text-slate-200",
+  discord: "bg-indigo-900 text-indigo-300",
+  notion: "bg-neutral-800 text-neutral-200",
+  salesforce: "bg-sky-900 text-sky-300",
+  jira: "bg-blue-900 text-blue-300",
+  ms_teams: "bg-indigo-900 text-indigo-300",
+  hubspot: "bg-orange-900 text-orange-300",
+  airtable: "bg-yellow-900 text-yellow-300",
+  pagerduty: "bg-emerald-900 text-emerald-300",
+  gitlab: "bg-orange-900 text-orange-300",
+  linear: "bg-indigo-900 text-indigo-300",
+  telegram: "bg-sky-900 text-sky-300",
+  sentry: "bg-violet-900 text-violet-300",
+  shopify: "bg-green-900 text-green-300",
+  mailchimp: "bg-yellow-900 text-yellow-300",
+  google_drive_oauth: "bg-blue-900 text-blue-300",
+  dropbox: "bg-blue-900 text-blue-300",
+  datadog: "bg-violet-900 text-violet-300",
+  paypal: "bg-blue-900 text-blue-300",
+  square: "bg-slate-800 text-slate-200",
+  resend: "bg-neutral-800 text-neutral-200",
+  onedrive: "bg-blue-900 text-blue-300",
+  box: "bg-blue-900 text-blue-300",
+  circleci: "bg-neutral-800 text-neutral-200",
+  whatsapp_business: "bg-green-900 text-green-300",
+  pipedrive: "bg-green-900 text-green-300",
+  customer_io: "bg-violet-900 text-violet-300",
+  kafka: "bg-neutral-800 text-neutral-200",
+  nats: "bg-sky-900 text-sky-300",
+  snowflake: "bg-sky-900 text-sky-300",
+  clickhouse: "bg-yellow-900 text-yellow-300",
+  elasticsearch: "bg-yellow-900 text-yellow-300",
+  stability: "bg-violet-900 text-violet-300",
+  assemblyai: "bg-blue-900 text-blue-300",
+  elevenlabs: "bg-neutral-800 text-neutral-200",
+  cohere: "bg-orange-900 text-orange-300",
+  pinecone: "bg-emerald-900 text-emerald-300",
+  weaviate: "bg-indigo-900 text-indigo-300",
+  qdrant: "bg-red-900 text-red-300",
   generic: "bg-muted text-foreground",
 };
 

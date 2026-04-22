@@ -84,6 +84,54 @@ import { AwsSsmNode } from "../nodes/AwsSsmNode";
 import { AwsEventBridgeNode } from "../nodes/AwsEventBridgeNode";
 import { AwsStepFunctionsNode } from "../nodes/AwsStepFunctionsNode";
 import { AzureBlobNode } from "../nodes/AzureBlobNode";
+import { AzureServiceBusNode } from "../nodes/AzureServiceBusNode";
+import { AzureCosmosNode } from "../nodes/AzureCosmosNode";
+import { AzureKeyVaultNode } from "../nodes/AzureKeyVaultNode";
+import { AzureFunctionsNode } from "../nodes/AzureFunctionsNode";
+import { GcpStorageNode } from "../nodes/GcpStorageNode";
+import { GcpPubSubNode } from "../nodes/GcpPubSubNode";
+import { GcpBigQueryNode } from "../nodes/GcpBigQueryNode";
+import { OracleDbNode } from "../nodes/OracleDbNode";
+import { OciObjectStorageNode } from "../nodes/OciObjectStorageNode";
+import { StripeNode } from "../nodes/StripeNode";
+import { GithubNode } from "../nodes/GithubNode";
+import { DiscordNode } from "../nodes/DiscordNode";
+import { NotionNode } from "../nodes/NotionNode";
+import { SalesforceNode } from "../nodes/SalesforceNode";
+import { JiraNode } from "../nodes/JiraNode";
+import { MsTeamsNode } from "../nodes/MsTeamsNode";
+import { HubspotNode } from "../nodes/HubspotNode";
+import { AirtableNode } from "../nodes/AirtableNode";
+import { PagerDutyNode } from "../nodes/PagerDutyNode";
+import { GitlabNode } from "../nodes/GitlabNode";
+import { LinearNode } from "../nodes/LinearNode";
+import { TelegramNode } from "../nodes/TelegramNode";
+import { SendgridNode } from "../nodes/SendgridNode";
+import { SentryNode } from "../nodes/SentryNode";
+import { ShopifyNode } from "../nodes/ShopifyNode";
+import { MailchimpNode } from "../nodes/MailchimpNode";
+import { GoogleDriveNode } from "../nodes/GoogleDriveNode";
+import { DropboxNode } from "../nodes/DropboxNode";
+import { DatadogNode } from "../nodes/DatadogNode";
+import { PaypalNode } from "../nodes/PaypalNode";
+import { SquareNode } from "../nodes/SquareNode";
+import { ResendNode } from "../nodes/ResendNode";
+import { OneDriveNode } from "../nodes/OneDriveNode";
+import { BoxNode } from "../nodes/BoxNode";
+import { CircleCINode } from "../nodes/CircleCINode";
+import { WhatsappNode } from "../nodes/WhatsappNode";
+import { PipedriveNode } from "../nodes/PipedriveNode";
+import { CustomerIoNode } from "../nodes/CustomerIoNode";
+import { KafkaNode } from "../nodes/KafkaNode";
+import { NatsNode } from "../nodes/NatsNode";
+import { SnowflakeNode } from "../nodes/SnowflakeNode";
+import { ClickhouseNode } from "../nodes/ClickhouseNode";
+import { ElasticsearchNode } from "../nodes/ElasticsearchNode";
+import { AiImageNode } from "../nodes/AiImageNode";
+import { AiTranscribeNode } from "../nodes/AiTranscribeNode";
+import { AiTtsNode } from "../nodes/AiTtsNode";
+import { AiEmbedNode } from "../nodes/AiEmbedNode";
+import { VectorDbNode } from "../nodes/VectorDbNode";
 import type {
   SubworkflowCallConfig,
   CustomBuilderConfig,
@@ -156,6 +204,54 @@ const nodeTypes = {
   aws_eventbridge: AwsEventBridgeNode,
   aws_step_functions: AwsStepFunctionsNode,
   azure_blob: AzureBlobNode,
+  azure_service_bus: AzureServiceBusNode,
+  azure_cosmos_db: AzureCosmosNode,
+  azure_key_vault: AzureKeyVaultNode,
+  azure_functions: AzureFunctionsNode,
+  gcp_storage: GcpStorageNode,
+  gcp_pubsub: GcpPubSubNode,
+  gcp_bigquery: GcpBigQueryNode,
+  oracle_db: OracleDbNode,
+  oci_object_storage: OciObjectStorageNode,
+  stripe: StripeNode,
+  github: GithubNode,
+  discord: DiscordNode,
+  notion: NotionNode,
+  salesforce: SalesforceNode,
+  jira: JiraNode,
+  ms_teams: MsTeamsNode,
+  hubspot: HubspotNode,
+  airtable: AirtableNode,
+  pagerduty: PagerDutyNode,
+  gitlab: GitlabNode,
+  linear: LinearNode,
+  telegram: TelegramNode,
+  sendgrid: SendgridNode,
+  sentry: SentryNode,
+  shopify: ShopifyNode,
+  mailchimp: MailchimpNode,
+  google_drive: GoogleDriveNode,
+  dropbox: DropboxNode,
+  datadog: DatadogNode,
+  paypal: PaypalNode,
+  square: SquareNode,
+  resend: ResendNode,
+  onedrive: OneDriveNode,
+  box: BoxNode,
+  circleci: CircleCINode,
+  whatsapp_business: WhatsappNode,
+  pipedrive: PipedriveNode,
+  customer_io: CustomerIoNode,
+  kafka: KafkaNode,
+  nats: NatsNode,
+  snowflake: SnowflakeNode,
+  clickhouse: ClickhouseNode,
+  elasticsearch: ElasticsearchNode,
+  ai_image: AiImageNode,
+  ai_transcribe: AiTranscribeNode,
+  ai_tts: AiTtsNode,
+  ai_embed: AiEmbedNode,
+  vector_db: VectorDbNode,
 };
 
 const edgeTypes: EdgeTypes = {

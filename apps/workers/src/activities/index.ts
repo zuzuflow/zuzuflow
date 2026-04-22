@@ -167,5 +167,227 @@ export type { AwsStepFunctionsActivityInput } from "./aws_step_functions";
 export { azureBlobActivity } from "./azure_blob";
 export type { AzureBlobActivityInput } from "./azure_blob";
 
+export { azureServiceBusActivity } from "./azure_service_bus";
+export type { AzureServiceBusActivityInput } from "./azure_service_bus";
+
+export { azureCosmosActivity } from "./azure_cosmos_db";
+export type { AzureCosmosActivityInput } from "./azure_cosmos_db";
+
+export { azureKeyVaultActivity } from "./azure_key_vault";
+export type { AzureKeyVaultActivityInput } from "./azure_key_vault";
+
+export { azureFunctionsActivity } from "./azure_functions";
+export type { AzureFunctionsActivityInput } from "./azure_functions";
+
+export { gcpStorageActivity } from "./gcp_storage";
+export type { GcpStorageActivityInput } from "./gcp_storage";
+
+export { gcpPubSubActivity } from "./gcp_pubsub";
+export type { GcpPubSubActivityInput } from "./gcp_pubsub";
+
+export { gcpBigQueryActivity } from "./gcp_bigquery";
+export type { GcpBigQueryActivityInput } from "./gcp_bigquery";
+
+export { oracleDbActivity } from "./oracle_db";
+export type { OracleDbActivityInput } from "./oracle_db";
+
+export { ociObjectStorageActivity } from "./oci_object_storage";
+export type { OciObjectStorageActivityInput } from "./oci_object_storage";
+
+// ── SaaS Integrations (Phase 2) ─────────────────────────────────────────────
+
+export { stripeActivity } from "./stripe";
+export type { StripeActivityInput, StripeActivityOutput } from "./stripe";
+
+export { githubActivity } from "./github";
+export type { GithubActivityInput, GithubActivityOutput } from "./github";
+
+export { discordActivity } from "./discord";
+export type { DiscordActivityInput, DiscordActivityOutput } from "./discord";
+
+export { notionActivity } from "./notion";
+export type { NotionActivityInput, NotionActivityOutput } from "./notion";
+
+export { salesforceActivity } from "./salesforce";
+export type {
+  SalesforceActivityInput,
+  SalesforceActivityOutput,
+} from "./salesforce";
+
+export { jiraActivity } from "./jira";
+export type { JiraActivityInput, JiraActivityOutput } from "./jira";
+
+export { msTeamsActivity } from "./ms_teams";
+export type {
+  MsTeamsActivityInput,
+  MsTeamsActivityOutput,
+} from "./ms_teams";
+
+export { hubspotActivity } from "./hubspot";
+export type { HubspotActivityInput, HubspotActivityOutput } from "./hubspot";
+
+export { airtableActivity } from "./airtable";
+export type {
+  AirtableActivityInput,
+  AirtableActivityOutput,
+} from "./airtable";
+
+export { pagerdutyActivity } from "./pagerduty";
+export type {
+  PagerDutyActivityInput,
+  PagerDutyActivityOutput,
+} from "./pagerduty";
+
+export { gitlabActivity } from "./gitlab";
+export type { GitlabActivityInput, GitlabActivityOutput } from "./gitlab";
+
+export { linearActivity } from "./linear";
+export type { LinearActivityInput, LinearActivityOutput } from "./linear";
+
+export { telegramActivity } from "./telegram";
+export type {
+  TelegramActivityInput,
+  TelegramActivityOutput,
+} from "./telegram";
+
+export { sendgridActivity } from "./sendgrid";
+export type {
+  SendgridActivityInput,
+  SendgridActivityOutput,
+} from "./sendgrid";
+
+export { sentryActivity } from "./sentry";
+export type { SentryActivityInput, SentryActivityOutput } from "./sentry";
+
+export { shopifyActivity } from "./shopify";
+export type {
+  ShopifyActivityInput,
+  ShopifyActivityOutput,
+} from "./shopify";
+
+export { mailchimpActivity } from "./mailchimp";
+export type {
+  MailchimpActivityInput,
+  MailchimpActivityOutput,
+} from "./mailchimp";
+
+export { googleDriveActivity } from "./google_drive";
+export type {
+  GoogleDriveActivityInput,
+  GoogleDriveActivityOutput,
+} from "./google_drive";
+
+export { dropboxActivity } from "./dropbox";
+export type {
+  DropboxActivityInput,
+  DropboxActivityOutput,
+} from "./dropbox";
+
+export { datadogActivity } from "./datadog";
+export type {
+  DatadogActivityInput,
+  DatadogActivityOutput,
+} from "./datadog";
+
+export { paypalActivity } from "./paypal";
+export type {
+  PaypalActivityInput,
+  PaypalActivityOutput,
+} from "./paypal";
+
+export { squareActivity } from "./square";
+export type { SquareActivityInput, SquareActivityOutput } from "./square";
+
+export { resendActivity } from "./resend";
+export type { ResendActivityInput, ResendActivityOutput } from "./resend";
+
+export { onedriveActivity } from "./onedrive";
+export type {
+  OneDriveActivityInput,
+  OneDriveActivityOutput,
+} from "./onedrive";
+
+export { boxActivity } from "./box";
+export type { BoxActivityInput, BoxActivityOutput } from "./box";
+
+export { circleciActivity } from "./circleci";
+export type {
+  CircleCIActivityInput,
+  CircleCIActivityOutput,
+} from "./circleci";
+
+export { whatsappActivity } from "./whatsapp_business";
+export type {
+  WhatsappActivityInput,
+  WhatsappActivityOutput,
+} from "./whatsapp_business";
+
+export { pipedriveActivity } from "./pipedrive";
+export type {
+  PipedriveActivityInput,
+  PipedriveActivityOutput,
+} from "./pipedrive";
+
+export { customerIoActivity } from "./customer_io";
+export type {
+  CustomerIoActivityInput,
+  CustomerIoActivityOutput,
+} from "./customer_io";
+
+// ── Phase 3: Streaming + Analytics ─────────────────────────────────────────
+
+export { kafkaActivity } from "./kafka";
+export type { KafkaActivityInput, KafkaActivityOutput } from "./kafka";
+
+export { natsActivity } from "./nats";
+export type { NatsActivityInput, NatsActivityOutput } from "./nats";
+
+export { snowflakeActivity } from "./snowflake";
+export type {
+  SnowflakeActivityInput,
+  SnowflakeActivityOutput,
+} from "./snowflake";
+
+export { clickhouseActivity } from "./clickhouse";
+export type {
+  ClickhouseActivityInput,
+  ClickhouseActivityOutput,
+} from "./clickhouse";
+
+export { elasticsearchActivity } from "./elasticsearch";
+export type {
+  ElasticsearchActivityInput,
+  ElasticsearchActivityOutput,
+} from "./elasticsearch";
+
+// ── Phase 4: AI ecosystem ──────────────────────────────────────────────────
+
+export { aiImageActivity } from "./ai_image";
+export type {
+  AiImageActivityInput,
+  AiImageActivityOutput,
+} from "./ai_image";
+
+export { aiTranscribeActivity } from "./ai_transcribe";
+export type {
+  AiTranscribeActivityInput,
+  AiTranscribeActivityOutput,
+} from "./ai_transcribe";
+
+export { aiTtsActivity } from "./ai_tts";
+export type { AiTtsActivityInput, AiTtsActivityOutput } from "./ai_tts";
+
+export { aiEmbedActivity } from "./ai_embed";
+export type {
+  AiEmbedActivityInput,
+  AiEmbedActivityOutput,
+} from "./ai_embed";
+
+export { vectorDbActivity } from "./vector_db";
+export type {
+  VectorDbActivityInput,
+  VectorDbActivityOutput,
+} from "./vector_db";
+
 export { aiAgentActivity } from "./aiAgent";
 export type { AiAgentActivityInput, AiAgentActivityOutput } from "./aiAgent";

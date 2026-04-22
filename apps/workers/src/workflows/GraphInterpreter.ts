@@ -87,6 +87,54 @@ import type {
   AwsEventBridgeConfig,
   AwsStepFunctionsConfig,
   AzureBlobConfig,
+  AzureServiceBusConfig,
+  AzureCosmosConfig,
+  AzureKeyVaultConfig,
+  AzureFunctionsConfig,
+  GcpStorageConfig,
+  GcpPubSubConfig,
+  GcpBigQueryConfig,
+  OracleDbConfig,
+  OciObjectStorageConfig,
+  StripeConfig,
+  GithubConfig,
+  DiscordConfig,
+  NotionConfig,
+  SalesforceConfig,
+  JiraConfig,
+  MsTeamsConfig,
+  HubspotConfig,
+  AirtableConfig,
+  PagerDutyConfig,
+  GitlabConfig,
+  LinearConfig,
+  TelegramConfig,
+  SendgridConfig,
+  SentryConfig,
+  ShopifyConfig,
+  MailchimpConfig,
+  GoogleDriveConfig,
+  DropboxConfig,
+  DatadogConfig,
+  PaypalConfig,
+  SquareConfig,
+  ResendConfig,
+  OneDriveConfig,
+  BoxConfig,
+  CircleCIConfig,
+  WhatsappConfig,
+  PipedriveConfig,
+  CustomerIoConfig,
+  KafkaConfig,
+  NatsConfig,
+  SnowflakeConfig,
+  ClickhouseConfig,
+  ElasticsearchConfig,
+  AiImageConfig,
+  AiTranscribeConfig,
+  AiTtsConfig,
+  AiEmbedConfig,
+  VectorDbConfig,
   WorkflowSettings,
 } from "@workflow/shared";
 
@@ -150,6 +198,54 @@ import type { AwsSsmActivityInput } from "../activities/aws_ssm";
 import type { AwsEventBridgeActivityInput } from "../activities/aws_eventbridge";
 import type { AwsStepFunctionsActivityInput } from "../activities/aws_step_functions";
 import type { AzureBlobActivityInput } from "../activities/azure_blob";
+import type { AzureServiceBusActivityInput } from "../activities/azure_service_bus";
+import type { AzureCosmosActivityInput } from "../activities/azure_cosmos_db";
+import type { AzureKeyVaultActivityInput } from "../activities/azure_key_vault";
+import type { AzureFunctionsActivityInput } from "../activities/azure_functions";
+import type { GcpStorageActivityInput } from "../activities/gcp_storage";
+import type { GcpPubSubActivityInput } from "../activities/gcp_pubsub";
+import type { GcpBigQueryActivityInput } from "../activities/gcp_bigquery";
+import type { OracleDbActivityInput } from "../activities/oracle_db";
+import type { OciObjectStorageActivityInput } from "../activities/oci_object_storage";
+import type { StripeActivityInput } from "../activities/stripe";
+import type { GithubActivityInput } from "../activities/github";
+import type { DiscordActivityInput } from "../activities/discord";
+import type { NotionActivityInput } from "../activities/notion";
+import type { SalesforceActivityInput } from "../activities/salesforce";
+import type { JiraActivityInput } from "../activities/jira";
+import type { MsTeamsActivityInput } from "../activities/ms_teams";
+import type { HubspotActivityInput } from "../activities/hubspot";
+import type { AirtableActivityInput } from "../activities/airtable";
+import type { PagerDutyActivityInput } from "../activities/pagerduty";
+import type { GitlabActivityInput } from "../activities/gitlab";
+import type { LinearActivityInput } from "../activities/linear";
+import type { TelegramActivityInput } from "../activities/telegram";
+import type { SendgridActivityInput } from "../activities/sendgrid";
+import type { SentryActivityInput } from "../activities/sentry";
+import type { ShopifyActivityInput } from "../activities/shopify";
+import type { MailchimpActivityInput } from "../activities/mailchimp";
+import type { GoogleDriveActivityInput } from "../activities/google_drive";
+import type { DropboxActivityInput } from "../activities/dropbox";
+import type { DatadogActivityInput } from "../activities/datadog";
+import type { PaypalActivityInput } from "../activities/paypal";
+import type { SquareActivityInput } from "../activities/square";
+import type { ResendActivityInput } from "../activities/resend";
+import type { OneDriveActivityInput } from "../activities/onedrive";
+import type { BoxActivityInput } from "../activities/box";
+import type { CircleCIActivityInput } from "../activities/circleci";
+import type { WhatsappActivityInput } from "../activities/whatsapp_business";
+import type { PipedriveActivityInput } from "../activities/pipedrive";
+import type { CustomerIoActivityInput } from "../activities/customer_io";
+import type { KafkaActivityInput } from "../activities/kafka";
+import type { NatsActivityInput } from "../activities/nats";
+import type { SnowflakeActivityInput } from "../activities/snowflake";
+import type { ClickhouseActivityInput } from "../activities/clickhouse";
+import type { ElasticsearchActivityInput } from "../activities/elasticsearch";
+import type { AiImageActivityInput } from "../activities/ai_image";
+import type { AiTranscribeActivityInput } from "../activities/ai_transcribe";
+import type { AiTtsActivityInput } from "../activities/ai_tts";
+import type { AiEmbedActivityInput } from "../activities/ai_embed";
+import type { VectorDbActivityInput } from "../activities/vector_db";
 
 // =============================================================================
 // Activity type map — used by proxyActivities inside the workflow function
@@ -231,6 +327,61 @@ type ActivityMap = {
     input: AwsStepFunctionsActivityInput,
   ): Promise<unknown>;
   azureBlobActivity(input: AzureBlobActivityInput): Promise<unknown>;
+  azureServiceBusActivity(
+    input: AzureServiceBusActivityInput,
+  ): Promise<unknown>;
+  azureCosmosActivity(input: AzureCosmosActivityInput): Promise<unknown>;
+  azureKeyVaultActivity(input: AzureKeyVaultActivityInput): Promise<unknown>;
+  azureFunctionsActivity(input: AzureFunctionsActivityInput): Promise<unknown>;
+  gcpStorageActivity(input: GcpStorageActivityInput): Promise<unknown>;
+  gcpPubSubActivity(input: GcpPubSubActivityInput): Promise<unknown>;
+  gcpBigQueryActivity(input: GcpBigQueryActivityInput): Promise<unknown>;
+  oracleDbActivity(input: OracleDbActivityInput): Promise<unknown>;
+  ociObjectStorageActivity(
+    input: OciObjectStorageActivityInput,
+  ): Promise<unknown>;
+  // SaaS Integrations (Phase 2)
+  stripeActivity(input: StripeActivityInput): Promise<unknown>;
+  githubActivity(input: GithubActivityInput): Promise<unknown>;
+  discordActivity(input: DiscordActivityInput): Promise<unknown>;
+  notionActivity(input: NotionActivityInput): Promise<unknown>;
+  salesforceActivity(input: SalesforceActivityInput): Promise<unknown>;
+  jiraActivity(input: JiraActivityInput): Promise<unknown>;
+  msTeamsActivity(input: MsTeamsActivityInput): Promise<unknown>;
+  hubspotActivity(input: HubspotActivityInput): Promise<unknown>;
+  airtableActivity(input: AirtableActivityInput): Promise<unknown>;
+  pagerdutyActivity(input: PagerDutyActivityInput): Promise<unknown>;
+  gitlabActivity(input: GitlabActivityInput): Promise<unknown>;
+  linearActivity(input: LinearActivityInput): Promise<unknown>;
+  telegramActivity(input: TelegramActivityInput): Promise<unknown>;
+  sendgridActivity(input: SendgridActivityInput): Promise<unknown>;
+  sentryActivity(input: SentryActivityInput): Promise<unknown>;
+  shopifyActivity(input: ShopifyActivityInput): Promise<unknown>;
+  mailchimpActivity(input: MailchimpActivityInput): Promise<unknown>;
+  googleDriveActivity(input: GoogleDriveActivityInput): Promise<unknown>;
+  dropboxActivity(input: DropboxActivityInput): Promise<unknown>;
+  datadogActivity(input: DatadogActivityInput): Promise<unknown>;
+  paypalActivity(input: PaypalActivityInput): Promise<unknown>;
+  squareActivity(input: SquareActivityInput): Promise<unknown>;
+  resendActivity(input: ResendActivityInput): Promise<unknown>;
+  onedriveActivity(input: OneDriveActivityInput): Promise<unknown>;
+  boxActivity(input: BoxActivityInput): Promise<unknown>;
+  circleciActivity(input: CircleCIActivityInput): Promise<unknown>;
+  whatsappActivity(input: WhatsappActivityInput): Promise<unknown>;
+  pipedriveActivity(input: PipedriveActivityInput): Promise<unknown>;
+  customerIoActivity(input: CustomerIoActivityInput): Promise<unknown>;
+  // Phase 3: Streaming + Analytics
+  kafkaActivity(input: KafkaActivityInput): Promise<unknown>;
+  natsActivity(input: NatsActivityInput): Promise<unknown>;
+  snowflakeActivity(input: SnowflakeActivityInput): Promise<unknown>;
+  clickhouseActivity(input: ClickhouseActivityInput): Promise<unknown>;
+  elasticsearchActivity(input: ElasticsearchActivityInput): Promise<unknown>;
+  // Phase 4: AI ecosystem
+  aiImageActivity(input: AiImageActivityInput): Promise<unknown>;
+  aiTranscribeActivity(input: AiTranscribeActivityInput): Promise<unknown>;
+  aiTtsActivity(input: AiTtsActivityInput): Promise<unknown>;
+  aiEmbedActivity(input: AiEmbedActivityInput): Promise<unknown>;
+  vectorDbActivity(input: VectorDbActivityInput): Promise<unknown>;
 };
 
 // =============================================================================
@@ -494,6 +645,54 @@ export async function graphInterpreterWorkflow(
     awsEventBridgeActivity,
     awsStepFunctionsActivity,
     azureBlobActivity,
+    azureServiceBusActivity,
+    azureCosmosActivity,
+    azureKeyVaultActivity,
+    azureFunctionsActivity,
+    gcpStorageActivity,
+    gcpPubSubActivity,
+    gcpBigQueryActivity,
+    oracleDbActivity,
+    ociObjectStorageActivity,
+    stripeActivity,
+    githubActivity,
+    discordActivity,
+    notionActivity,
+    salesforceActivity,
+    jiraActivity,
+    msTeamsActivity,
+    hubspotActivity,
+    airtableActivity,
+    pagerdutyActivity,
+    gitlabActivity,
+    linearActivity,
+    telegramActivity,
+    sendgridActivity,
+    sentryActivity,
+    shopifyActivity,
+    mailchimpActivity,
+    googleDriveActivity,
+    dropboxActivity,
+    datadogActivity,
+    paypalActivity,
+    squareActivity,
+    resendActivity,
+    onedriveActivity,
+    boxActivity,
+    circleciActivity,
+    whatsappActivity,
+    pipedriveActivity,
+    customerIoActivity,
+    kafkaActivity,
+    natsActivity,
+    snowflakeActivity,
+    clickhouseActivity,
+    elasticsearchActivity,
+    aiImageActivity,
+    aiTranscribeActivity,
+    aiTtsActivity,
+    aiEmbedActivity,
+    vectorDbActivity,
   } = proxyActivities<ActivityMap>({
     startToCloseTimeout: ws.activityStartToCloseTimeout ?? "5 minutes",
     ...(ws.activityScheduleToStartTimeout
@@ -1991,6 +2190,949 @@ export async function graphInterpreterWorkflow(
               config: cfg,
               context: nodeOutputs,
               resolvedCredentials,
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Azure Service Bus
+          // ------------------------------------------------------------------
+          case "azure_service_bus": {
+            const cfg = node.config as AzureServiceBusConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await azureServiceBusActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { connectionString: cred.connectionString },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Azure Cosmos DB
+          // ------------------------------------------------------------------
+          case "azure_cosmos_db": {
+            const cfg = node.config as AzureCosmosConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await azureCosmosActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                connectionString: cred.connectionString,
+                cosmosEndpoint: cred.cosmosEndpoint,
+                cosmosKey: cred.cosmosKey,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Azure Key Vault
+          // ------------------------------------------------------------------
+          case "azure_key_vault": {
+            const cfg = node.config as AzureKeyVaultConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await azureKeyVaultActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                tenantId: cred.tenantId,
+                clientId: cred.clientId,
+                clientSecret: cred.clientSecret,
+                vaultUrl: cred.vaultUrl,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Azure Functions
+          // ------------------------------------------------------------------
+          case "azure_functions": {
+            const cfg = node.config as AzureFunctionsConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await azureFunctionsActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { functionKey: cred.functionKey },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // GCP Storage
+          // ------------------------------------------------------------------
+          case "gcp_storage": {
+            const cfg = node.config as GcpStorageConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await gcpStorageActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                serviceAccountJson: cred.serviceAccountJson,
+                projectId: cred.projectId,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // GCP Pub/Sub
+          // ------------------------------------------------------------------
+          case "gcp_pubsub": {
+            const cfg = node.config as GcpPubSubConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await gcpPubSubActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                serviceAccountJson: cred.serviceAccountJson,
+                projectId: cred.projectId,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // GCP BigQuery
+          // ------------------------------------------------------------------
+          case "gcp_bigquery": {
+            const cfg = node.config as GcpBigQueryConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await gcpBigQueryActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                serviceAccountJson: cred.serviceAccountJson,
+                projectId: cred.projectId,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Oracle Database
+          // ------------------------------------------------------------------
+          case "oracle_db": {
+            const cfg = node.config as OracleDbConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await oracleDbActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                user: cred.user,
+                password: cred.password,
+                connectString: cred.connectString,
+                walletLocation: cred.walletLocation,
+                walletPassword: cred.walletPassword,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // OCI Object Storage
+          // ------------------------------------------------------------------
+          case "oci_object_storage": {
+            const cfg = node.config as OciObjectStorageConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await ociObjectStorageActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                tenancy: cred.tenancy,
+                user: cred.user,
+                fingerprint: cred.fingerprint,
+                privateKey: cred.privateKey,
+                region: cred.region,
+                namespace: cred.namespace,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Stripe
+          // ------------------------------------------------------------------
+          case "stripe": {
+            const cfg = node.config as StripeConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await stripeActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { apiKey: cred.apiKey },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // GitHub
+          // ------------------------------------------------------------------
+          case "github": {
+            const cfg = node.config as GithubConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await githubActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { token: cred.token },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Discord
+          // ------------------------------------------------------------------
+          case "discord": {
+            const cfg = node.config as DiscordConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await discordActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                webhookUrl: cred.webhookUrl,
+                botToken: cred.botToken,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Notion
+          // ------------------------------------------------------------------
+          case "notion": {
+            const cfg = node.config as NotionConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await notionActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { token: cred.token },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Salesforce
+          // ------------------------------------------------------------------
+          case "salesforce": {
+            const cfg = node.config as SalesforceConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await salesforceActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                loginUrl: cred.loginUrl,
+                username: cred.username,
+                password: cred.password,
+                securityToken: cred.securityToken,
+                instanceUrl: cred.instanceUrl,
+                accessToken: cred.accessToken,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Jira
+          // ------------------------------------------------------------------
+          case "jira": {
+            const cfg = node.config as JiraConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await jiraActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                baseUrl: cred.baseUrl,
+                email: cred.email,
+                apiToken: cred.apiToken,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // MS Teams
+          // ------------------------------------------------------------------
+          case "ms_teams": {
+            const cfg = node.config as MsTeamsConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await msTeamsActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { webhookUrl: cred.webhookUrl },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // HubSpot
+          // ------------------------------------------------------------------
+          case "hubspot": {
+            const cfg = node.config as HubspotConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await hubspotActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                privateAppToken: cred.privateAppToken,
+                apiKey: cred.apiKey,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Airtable
+          // ------------------------------------------------------------------
+          case "airtable": {
+            const cfg = node.config as AirtableConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await airtableActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { apiKey: cred.apiKey },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // PagerDuty
+          // ------------------------------------------------------------------
+          case "pagerduty": {
+            const cfg = node.config as PagerDutyConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await pagerdutyActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                routingKey: cred.routingKey,
+                apiToken: cred.apiToken,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // GitLab
+          // ------------------------------------------------------------------
+          case "gitlab": {
+            const cfg = node.config as GitlabConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await gitlabActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                baseUrl: cred.baseUrl,
+                token: cred.token,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Linear
+          // ------------------------------------------------------------------
+          case "linear": {
+            const cfg = node.config as LinearConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await linearActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { apiKey: cred.apiKey },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Telegram
+          // ------------------------------------------------------------------
+          case "telegram": {
+            const cfg = node.config as TelegramConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await telegramActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { botToken: cred.botToken },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // SendGrid
+          // ------------------------------------------------------------------
+          case "sendgrid": {
+            const cfg = node.config as SendgridConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await sendgridActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { apiKey: cred.apiKey },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Sentry
+          // ------------------------------------------------------------------
+          case "sentry": {
+            const cfg = node.config as SentryConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await sentryActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                dsn: cred.dsn,
+                authToken: cred.authToken,
+                organizationSlug: cred.organizationSlug,
+                projectSlug: cred.projectSlug,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Shopify
+          // ------------------------------------------------------------------
+          case "shopify": {
+            const cfg = node.config as ShopifyConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await shopifyActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                shopDomain: cred.shopDomain,
+                accessToken: cred.accessToken,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Mailchimp
+          // ------------------------------------------------------------------
+          case "mailchimp": {
+            const cfg = node.config as MailchimpConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await mailchimpActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { apiKey: cred.apiKey },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Google Drive
+          // ------------------------------------------------------------------
+          case "google_drive": {
+            const cfg = node.config as GoogleDriveConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await googleDriveActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                serviceAccountJson: cred.serviceAccountJson,
+                accessToken: cred.accessToken,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Dropbox
+          // ------------------------------------------------------------------
+          case "dropbox": {
+            const cfg = node.config as DropboxConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await dropboxActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { accessToken: cred.accessToken },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Datadog
+          // ------------------------------------------------------------------
+          case "datadog": {
+            const cfg = node.config as DatadogConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await datadogActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                apiKey: cred.apiKey,
+                appKey: cred.appKey,
+                site: cred.site,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // PayPal
+          // ------------------------------------------------------------------
+          case "paypal": {
+            const cfg = node.config as PaypalConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await paypalActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                clientId: cred.clientId,
+                clientSecret: cred.clientSecret,
+                environment: cred.environment,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Square
+          // ------------------------------------------------------------------
+          case "square": {
+            const cfg = node.config as SquareConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await squareActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                accessToken: cred.accessToken,
+                environment: cred.environment,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Resend
+          // ------------------------------------------------------------------
+          case "resend": {
+            const cfg = node.config as ResendConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await resendActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { apiKey: cred.apiKey },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // OneDrive
+          // ------------------------------------------------------------------
+          case "onedrive": {
+            const cfg = node.config as OneDriveConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await onedriveActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { accessToken: cred.accessToken },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Box
+          // ------------------------------------------------------------------
+          case "box": {
+            const cfg = node.config as BoxConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await boxActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { accessToken: cred.accessToken },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // CircleCI
+          // ------------------------------------------------------------------
+          case "circleci": {
+            const cfg = node.config as CircleCIConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await circleciActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { token: cred.token },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // WhatsApp Business
+          // ------------------------------------------------------------------
+          case "whatsapp_business": {
+            const cfg = node.config as WhatsappConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await whatsappActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                accessToken: cred.accessToken,
+                phoneNumberId: cred.phoneNumberId,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Pipedrive
+          // ------------------------------------------------------------------
+          case "pipedrive": {
+            const cfg = node.config as PipedriveConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await pipedriveActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                apiToken: cred.apiToken,
+                companyDomain: cred.companyDomain,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Customer.io
+          // ------------------------------------------------------------------
+          case "customer_io": {
+            const cfg = node.config as CustomerIoConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await customerIoActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                siteId: cred.siteId,
+                apiKey: cred.apiKey,
+                appApiKey: cred.appApiKey,
+                region: cred.region,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Kafka
+          // ------------------------------------------------------------------
+          case "kafka": {
+            const cfg = node.config as KafkaConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await kafkaActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                brokers: cred.brokers,
+                clientId: cred.clientId,
+                ssl: cred.ssl,
+                sasl: cred.sasl,
+                saslMechanism: cred.saslMechanism,
+                username: cred.username,
+                password: cred.password,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // NATS
+          // ------------------------------------------------------------------
+          case "nats": {
+            const cfg = node.config as NatsConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await natsActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                servers: cred.servers,
+                user: cred.user,
+                pass: cred.pass,
+                token: cred.token,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Snowflake
+          // ------------------------------------------------------------------
+          case "snowflake": {
+            const cfg = node.config as SnowflakeConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await snowflakeActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                account: cred.account,
+                username: cred.username,
+                password: cred.password,
+                privateKey: cred.privateKey,
+                database: cred.database,
+                schema: cred.schema,
+                warehouse: cred.warehouse,
+                role: cred.role,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // ClickHouse
+          // ------------------------------------------------------------------
+          case "clickhouse": {
+            const cfg = node.config as ClickhouseConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await clickhouseActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                url: cred.url,
+                username: cred.username,
+                password: cred.password,
+                database: cred.database,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Elasticsearch
+          // ------------------------------------------------------------------
+          case "elasticsearch": {
+            const cfg = node.config as ElasticsearchConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await elasticsearchActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                node: cred.node,
+                apiKey: cred.apiKey,
+                username: cred.username,
+                password: cred.password,
+                ca: cred.ca,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // AI: Image generation
+          // ------------------------------------------------------------------
+          case "ai_image": {
+            const cfg = node.config as AiImageConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await aiImageActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { apiKey: cred.apiKey },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // AI: Transcribe (speech-to-text)
+          // ------------------------------------------------------------------
+          case "ai_transcribe": {
+            const cfg = node.config as AiTranscribeConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await aiTranscribeActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { apiKey: cred.apiKey },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // AI: TTS (text-to-speech)
+          // ------------------------------------------------------------------
+          case "ai_tts": {
+            const cfg = node.config as AiTtsConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await aiTtsActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: { apiKey: cred.apiKey },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // AI: Embeddings
+          // ------------------------------------------------------------------
+          case "ai_embed": {
+            const cfg = node.config as AiEmbedConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await aiEmbedActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                apiKey: cred.apiKey,
+                apiToken: cred.apiToken,
+              },
+            });
+            outgoingHandles = [""];
+            break;
+          }
+
+          // ------------------------------------------------------------------
+          // Vector DB (Pinecone / Weaviate / Qdrant)
+          // ------------------------------------------------------------------
+          case "vector_db": {
+            const cfg = node.config as VectorDbConfig;
+            const cred = cfg.credentialId
+              ? await resolveCredentialActivity(cfg.credentialId)
+              : {};
+            nodeOutput = await vectorDbActivity({
+              config: cfg,
+              context: nodeOutputs,
+              resolvedCredentials: {
+                apiKey: cred.apiKey,
+                indexHost: cred.indexHost,
+                url: cred.url,
+              },
             });
             outgoingHandles = [""];
             break;

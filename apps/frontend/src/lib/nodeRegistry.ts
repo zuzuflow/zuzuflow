@@ -60,6 +60,54 @@ import type {
   AwsEventBridgeConfig,
   AwsStepFunctionsConfig,
   AzureBlobConfig,
+  AzureServiceBusConfig,
+  AzureCosmosConfig,
+  AzureKeyVaultConfig,
+  AzureFunctionsConfig,
+  GcpStorageConfig,
+  GcpPubSubConfig,
+  GcpBigQueryConfig,
+  OracleDbConfig,
+  OciObjectStorageConfig,
+  StripeConfig,
+  GithubConfig,
+  DiscordConfig,
+  NotionConfig,
+  SalesforceConfig,
+  JiraConfig,
+  MsTeamsConfig,
+  HubspotConfig,
+  AirtableConfig,
+  PagerDutyConfig,
+  GitlabConfig,
+  LinearConfig,
+  TelegramConfig,
+  SendgridConfig,
+  SentryConfig,
+  ShopifyConfig,
+  MailchimpConfig,
+  GoogleDriveConfig,
+  DropboxConfig,
+  DatadogConfig,
+  PaypalConfig,
+  SquareConfig,
+  ResendConfig,
+  OneDriveConfig,
+  BoxConfig,
+  CircleCIConfig,
+  WhatsappConfig,
+  PipedriveConfig,
+  CustomerIoConfig,
+  KafkaConfig,
+  NatsConfig,
+  SnowflakeConfig,
+  ClickhouseConfig,
+  ElasticsearchConfig,
+  AiImageConfig,
+  AiTranscribeConfig,
+  AiTtsConfig,
+  AiEmbedConfig,
+  VectorDbConfig,
 } from "@workflow/shared";
 
 // =============================================================================
@@ -375,6 +423,324 @@ const defaultAzureBlobConfig: AzureBlobConfig = {
   blob: "",
   contentType: "application/json",
   maxResults: 100,
+};
+
+const defaultAzureServiceBusConfig: AzureServiceBusConfig = {
+  operation: "sendMessage",
+  entityName: "",
+  maxMessages: 1,
+};
+
+const defaultAzureCosmosConfig: AzureCosmosConfig = {
+  operation: "query",
+  databaseId: "",
+  containerId: "",
+  query: "SELECT * FROM c",
+  maxItems: 100,
+};
+
+const defaultAzureKeyVaultConfig: AzureKeyVaultConfig = {
+  operation: "getSecret",
+  secretName: "",
+};
+
+const defaultAzureFunctionsConfig: AzureFunctionsConfig = {
+  functionUrl: "",
+  method: "POST",
+  timeoutMs: 30000,
+};
+
+const defaultGcpStorageConfig: GcpStorageConfig = {
+  operation: "uploadObject",
+  bucket: "",
+  contentType: "application/json",
+  maxResults: 100,
+};
+
+const defaultGcpPubSubConfig: GcpPubSubConfig = {
+  operation: "publish",
+  topic: "",
+  maxMessages: 10,
+};
+
+const defaultGcpBigQueryConfig: GcpBigQueryConfig = {
+  operation: "query",
+  query: "SELECT 1",
+  useLegacySql: false,
+  maxResults: 100,
+};
+
+const defaultOracleDbConfig: OracleDbConfig = {
+  query: "SELECT 1 FROM dual",
+  maxRows: 1000,
+  autoCommit: true,
+};
+
+const defaultOciObjectStorageConfig: OciObjectStorageConfig = {
+  operation: "putObject",
+  bucket: "",
+  contentType: "application/json",
+  maxResults: 100,
+};
+
+// ── SaaS Integrations (Phase 2) ────────────────────────────────────────────
+
+const defaultStripeConfig: StripeConfig = {
+  operation: "charges.create",
+  amount: "",
+  currency: "usd",
+};
+
+const defaultGithubConfig: GithubConfig = {
+  operation: "issues.create",
+  owner: "",
+  repo: "",
+  title: "Issue from workflow",
+  body: "Triggered by workflow",
+};
+
+const defaultDiscordConfig: DiscordConfig = {
+  operation: "sendWebhookMessage",
+  content: "Hello from workflow {{workflowId}}",
+};
+
+const defaultNotionConfig: NotionConfig = {
+  operation: "databases.query",
+  databaseId: "",
+  pageSize: 100,
+};
+
+const defaultSalesforceConfig: SalesforceConfig = {
+  operation: "query",
+  soql: "SELECT Id, Name FROM Account LIMIT 10",
+  maxRows: 2000,
+};
+
+const defaultJiraConfig: JiraConfig = {
+  operation: "issues.create",
+  projectKey: "",
+  issueType: "Task",
+  summary: "Issue from workflow",
+};
+
+const defaultMsTeamsConfig: MsTeamsConfig = {
+  operation: "sendWebhookMessage",
+  title: "Workflow notification",
+  message: "Hello from workflow {{workflowId}}",
+  themeColor: "0076D7",
+};
+
+const defaultHubspotConfig: HubspotConfig = {
+  operation: "contacts.create",
+  properties: '{"email": "{{input.email}}"}',
+};
+
+const defaultAirtableConfig: AirtableConfig = {
+  operation: "records.list",
+  baseId: "",
+  table: "",
+  maxRecords: 100,
+};
+
+const defaultPagerDutyConfig: PagerDutyConfig = {
+  operation: "events.trigger",
+  summary: "Alert from workflow {{workflowId}}",
+  source: "workflow",
+  severity: "error",
+};
+
+const defaultGitlabConfig: GitlabConfig = {
+  operation: "issues.create",
+  projectId: "",
+  title: "Issue from workflow",
+};
+
+const defaultLinearConfig: LinearConfig = {
+  operation: "issues.create",
+  teamId: "",
+  title: "Issue from workflow",
+  priority: 3,
+};
+
+const defaultTelegramConfig: TelegramConfig = {
+  operation: "sendMessage",
+  chatId: "",
+  text: "Hello from workflow {{workflowId}}",
+};
+
+const defaultSendgridConfig: SendgridConfig = {
+  operation: "mail.send",
+  from: "noreply@example.com",
+  to: "{{input.email}}",
+  subject: "Notification from ZuzuFlow",
+  text: "Your workflow triggered a notification.",
+};
+
+const defaultSentryConfig: SentryConfig = {
+  operation: "events.captureMessage",
+  message: "Alert from workflow {{workflowId}}",
+  level: "error",
+};
+
+const defaultShopifyConfig: ShopifyConfig = {
+  operation: "orders.list",
+  apiVersion: "2024-10",
+  limit: 50,
+};
+
+const defaultMailchimpConfig: MailchimpConfig = {
+  operation: "lists.addMember",
+  listId: "",
+  email: "{{input.email}}",
+  status: "subscribed",
+};
+
+const defaultGoogleDriveConfig: GoogleDriveConfig = {
+  operation: "files.list",
+  pageSize: 100,
+};
+
+const defaultDropboxConfig: DropboxConfig = {
+  operation: "files.upload",
+  path: "/reports/{{nodeId}}.txt",
+  mode: "overwrite",
+  content: "Workflow run {{executionId}}",
+};
+
+const defaultDatadogConfig: DatadogConfig = {
+  operation: "metrics.submit",
+  metricName: "workflow.run",
+  metricValue: "1",
+  metricType: "count",
+};
+
+const defaultPaypalConfig: PaypalConfig = {
+  operation: "orders.create",
+  intent: "CAPTURE",
+  amount: "19.99",
+  currency: "USD",
+};
+
+const defaultSquareConfig: SquareConfig = {
+  operation: "payments.create",
+  amountMinor: "1999",
+  currency: "USD",
+};
+
+const defaultResendConfig: ResendConfig = {
+  operation: "emails.send",
+  from: "noreply@yourdomain.com",
+  to: "{{input.email}}",
+  subject: "Hello from workflow",
+  text: "Your workflow just ran.",
+};
+
+const defaultOneDriveConfig: OneDriveConfig = {
+  operation: "files.list",
+};
+
+const defaultBoxConfig: BoxConfig = {
+  operation: "files.upload",
+  folderId: "0",
+  name: "report.txt",
+  content: "Workflow run {{executionId}}",
+};
+
+const defaultCircleCIConfig: CircleCIConfig = {
+  operation: "pipelines.trigger",
+  projectSlug: "",
+  branch: "main",
+};
+
+const defaultWhatsappConfig: WhatsappConfig = {
+  operation: "messages.sendText",
+  to: "{{input.phone}}",
+  text: "Hello from workflow {{workflowId}}",
+};
+
+const defaultPipedriveConfig: PipedriveConfig = {
+  operation: "deals.create",
+  body: '{"title": "{{input.name}}", "value": 1000, "currency": "USD"}',
+  limit: 100,
+};
+
+const defaultCustomerIoConfig: CustomerIoConfig = {
+  operation: "track",
+  customerId: "{{input.email}}",
+  eventName: "workflow_event",
+  data: "{}",
+};
+
+const defaultKafkaConfig: KafkaConfig = {
+  operation: "produce",
+  topic: "events",
+  messageValue: '{"event":"{{input.type}}"}',
+  acks: "1",
+};
+
+const defaultNatsConfig: NatsConfig = {
+  operation: "publish",
+  subject: "events.workflow",
+  payload: '{"event":"{{input.type}}"}',
+  timeoutMs: 5000,
+};
+
+const defaultSnowflakeConfig: SnowflakeConfig = {
+  operation: "query",
+  sql: "SELECT current_warehouse(), current_version()",
+  maxRows: 10000,
+};
+
+const defaultClickhouseConfig: ClickhouseConfig = {
+  operation: "query",
+  query: "SELECT 1",
+  format: "JSONEachRow",
+  maxRows: 10000,
+};
+
+const defaultElasticsearchConfig: ElasticsearchConfig = {
+  operation: "index",
+  index: "logs",
+  document: '{"level":"info","msg":"{{input.message}}"}',
+};
+
+const defaultAiImageConfig: AiImageConfig = {
+  provider: "openai",
+  model: "dall-e-3",
+  prompt: "A serene mountain landscape at sunset, photorealistic",
+  size: "1024x1024",
+  n: 1,
+  responseFormat: "url",
+};
+
+const defaultAiTranscribeConfig: AiTranscribeConfig = {
+  provider: "openai",
+  model: "whisper-1",
+  audioUrl: "{{input.audioUrl}}",
+  responseFormat: "json",
+};
+
+const defaultAiTtsConfig: AiTtsConfig = {
+  provider: "openai",
+  model: "tts-1",
+  text: "Hello from workflow {{workflowId}}.",
+  voice: "alloy",
+  format: "mp3",
+  speed: 1,
+};
+
+const defaultAiEmbedConfig: AiEmbedConfig = {
+  provider: "openai",
+  model: "text-embedding-3-small",
+  input: '["{{input.text}}"]',
+};
+
+const defaultVectorDbConfig: VectorDbConfig = {
+  provider: "pinecone",
+  operation: "upsert",
+  collection: "",
+  topK: 10,
+  includeMetadata: true,
 };
 
 const defaultLlmConfig: LlmPromptConfig = {
@@ -1106,6 +1472,502 @@ export const nodeRegistry: Record<NodeKind, NodeRegistryEntry> = {
     description: "Upload, download, list, or delete blobs in Azure Storage",
     defaultLabel: "Azure Blob",
     defaultConfig: defaultAzureBlobConfig,
+    handles: ACTION_HANDLES,
+  },
+  azure_service_bus: {
+    label: "Azure Service Bus",
+    category: "cloud_azure",
+    color: "#0078d4",
+    icon: "MessageSquare",
+    description: "Send / receive / peek messages on Azure Service Bus queues & topics",
+    defaultLabel: "Service Bus",
+    defaultConfig: defaultAzureServiceBusConfig,
+    handles: ACTION_HANDLES,
+  },
+  azure_cosmos_db: {
+    label: "Azure Cosmos DB",
+    category: "cloud_azure",
+    color: "#0078d4",
+    icon: "Database",
+    description: "Query, upsert, read, or delete documents in Cosmos DB",
+    defaultLabel: "Cosmos DB",
+    defaultConfig: defaultAzureCosmosConfig,
+    handles: ACTION_HANDLES,
+  },
+  azure_key_vault: {
+    label: "Azure Key Vault",
+    category: "cloud_azure",
+    color: "#0078d4",
+    icon: "KeyRound",
+    description: "Get / set / list / delete secrets in Azure Key Vault",
+    defaultLabel: "Key Vault",
+    defaultConfig: defaultAzureKeyVaultConfig,
+    handles: ACTION_HANDLES,
+  },
+  azure_functions: {
+    label: "Azure Functions",
+    category: "cloud_azure",
+    color: "#0078d4",
+    icon: "Zap",
+    description: "Invoke an Azure Function via its HTTPS endpoint",
+    defaultLabel: "Azure Function",
+    defaultConfig: defaultAzureFunctionsConfig,
+    handles: ACTION_HANDLES,
+  },
+
+  // ── GOOGLE CLOUD ───────────────────────────────────────────────────────────
+
+  gcp_storage: {
+    label: "Cloud Storage",
+    category: "cloud_gcp",
+    color: "#4285f4",
+    icon: "HardDrive",
+    description: "Upload / download / list / delete objects in Google Cloud Storage",
+    defaultLabel: "GCS",
+    defaultConfig: defaultGcpStorageConfig,
+    handles: ACTION_HANDLES,
+  },
+  gcp_pubsub: {
+    label: "Pub/Sub",
+    category: "cloud_gcp",
+    color: "#4285f4",
+    icon: "Radio",
+    description: "Publish / pull / acknowledge messages on Google Pub/Sub",
+    defaultLabel: "Pub/Sub",
+    defaultConfig: defaultGcpPubSubConfig,
+    handles: ACTION_HANDLES,
+  },
+  gcp_bigquery: {
+    label: "BigQuery",
+    category: "cloud_gcp",
+    color: "#4285f4",
+    icon: "Table2",
+    description: "Run SQL queries or insert rows into BigQuery tables",
+    defaultLabel: "BigQuery",
+    defaultConfig: defaultGcpBigQueryConfig,
+    handles: ACTION_HANDLES,
+  },
+
+  // ── ORACLE CLOUD ───────────────────────────────────────────────────────────
+
+  oracle_db: {
+    label: "Oracle Database",
+    category: "cloud_oracle",
+    color: "#c74634",
+    icon: "Database",
+    description: "Parameterised query against an Oracle database (Thin client, Wallet-capable)",
+    defaultLabel: "Oracle DB",
+    defaultConfig: defaultOracleDbConfig,
+    handles: ACTION_HANDLES,
+  },
+  oci_object_storage: {
+    label: "OCI Object Storage",
+    category: "cloud_oracle",
+    color: "#c74634",
+    icon: "HardDrive",
+    description: "Put / get / list / delete objects in OCI Object Storage",
+    defaultLabel: "OCI Object Storage",
+    defaultConfig: defaultOciObjectStorageConfig,
+    handles: ACTION_HANDLES,
+  },
+
+  // ── INTEGRATIONS (Phase 2 SaaS natives) ───────────────────────────────────
+
+  stripe: {
+    label: "Stripe",
+    category: "integrations",
+    color: "#635bff",
+    icon: "CreditCard",
+    description: "Charges, customers, subscriptions, payment intents, invoices",
+    defaultLabel: "Stripe",
+    defaultConfig: defaultStripeConfig,
+    handles: ACTION_HANDLES,
+  },
+  github: {
+    label: "GitHub",
+    category: "integrations",
+    color: "#24292f",
+    icon: "Github",
+    description: "Manage issues, pull requests, workflow dispatches, repos",
+    defaultLabel: "GitHub",
+    defaultConfig: defaultGithubConfig,
+    handles: ACTION_HANDLES,
+  },
+  discord: {
+    label: "Discord",
+    category: "integrations",
+    color: "#5865f2",
+    icon: "MessageSquare",
+    description: "Send webhook messages, channel messages, reactions",
+    defaultLabel: "Discord",
+    defaultConfig: defaultDiscordConfig,
+    handles: ACTION_HANDLES,
+  },
+  notion: {
+    label: "Notion",
+    category: "integrations",
+    color: "#000000",
+    icon: "BookOpen",
+    description: "Pages, blocks, database queries, search",
+    defaultLabel: "Notion",
+    defaultConfig: defaultNotionConfig,
+    handles: ACTION_HANDLES,
+  },
+  salesforce: {
+    label: "Salesforce",
+    category: "integrations",
+    color: "#00a1e0",
+    icon: "Cloud",
+    description: "SOQL queries, sObject CRUD, Apex REST",
+    defaultLabel: "Salesforce",
+    defaultConfig: defaultSalesforceConfig,
+    handles: ACTION_HANDLES,
+  },
+  jira: {
+    label: "Jira",
+    category: "integrations",
+    color: "#0052cc",
+    icon: "Ticket",
+    description: "Create / update / transition issues, add comments, JQL search",
+    defaultLabel: "Jira",
+    defaultConfig: defaultJiraConfig,
+    handles: ACTION_HANDLES,
+  },
+  ms_teams: {
+    label: "Microsoft Teams",
+    category: "integrations",
+    color: "#4a54c5",
+    icon: "MessagesSquare",
+    description: "Send channel messages or adaptive cards via Incoming Webhook",
+    defaultLabel: "MS Teams",
+    defaultConfig: defaultMsTeamsConfig,
+    handles: ACTION_HANDLES,
+  },
+  hubspot: {
+    label: "HubSpot",
+    category: "integrations",
+    color: "#ff7a59",
+    icon: "Users",
+    description: "CRM contacts, companies, deals CRUD + search",
+    defaultLabel: "HubSpot",
+    defaultConfig: defaultHubspotConfig,
+    handles: ACTION_HANDLES,
+  },
+  airtable: {
+    label: "Airtable",
+    category: "integrations",
+    color: "#fcb400",
+    icon: "Table2",
+    description: "List / get / create / update / delete records in Airtable",
+    defaultLabel: "Airtable",
+    defaultConfig: defaultAirtableConfig,
+    handles: ACTION_HANDLES,
+  },
+  pagerduty: {
+    label: "PagerDuty",
+    category: "integrations",
+    color: "#06ac38",
+    icon: "Siren",
+    description: "Trigger / acknowledge / resolve incidents + REST create/list",
+    defaultLabel: "PagerDuty",
+    defaultConfig: defaultPagerDutyConfig,
+    handles: ACTION_HANDLES,
+  },
+  gitlab: {
+    label: "GitLab",
+    category: "integrations",
+    color: "#fc6d26",
+    icon: "GitMerge",
+    description: "Issues, merge requests, pipeline triggers on GitLab",
+    defaultLabel: "GitLab",
+    defaultConfig: defaultGitlabConfig,
+    handles: ACTION_HANDLES,
+  },
+  linear: {
+    label: "Linear",
+    category: "integrations",
+    color: "#5e6ad2",
+    icon: "Target",
+    description: "Issues, teams, comments — Linear GraphQL API",
+    defaultLabel: "Linear",
+    defaultConfig: defaultLinearConfig,
+    handles: ACTION_HANDLES,
+  },
+  telegram: {
+    label: "Telegram",
+    category: "integrations",
+    color: "#229ed9",
+    icon: "Send",
+    description: "Send messages, photos, documents; edit; answer callbacks",
+    defaultLabel: "Telegram",
+    defaultConfig: defaultTelegramConfig,
+    handles: ACTION_HANDLES,
+  },
+  sendgrid: {
+    label: "SendGrid",
+    category: "integrations",
+    color: "#1a82e2",
+    icon: "Mail",
+    description: "Transactional email via SendGrid (dynamic templates supported)",
+    defaultLabel: "SendGrid",
+    defaultConfig: defaultSendgridConfig,
+    handles: ACTION_HANDLES,
+  },
+  sentry: {
+    label: "Sentry",
+    category: "integrations",
+    color: "#362d59",
+    icon: "Bug",
+    description: "Capture messages/exceptions, list/resolve issues",
+    defaultLabel: "Sentry",
+    defaultConfig: defaultSentryConfig,
+    handles: ACTION_HANDLES,
+  },
+  shopify: {
+    label: "Shopify",
+    category: "integrations",
+    color: "#96bf48",
+    icon: "ShoppingBag",
+    description: "Orders, products, customers, inventory (Shopify Admin REST)",
+    defaultLabel: "Shopify",
+    defaultConfig: defaultShopifyConfig,
+    handles: ACTION_HANDLES,
+  },
+  mailchimp: {
+    label: "Mailchimp",
+    category: "integrations",
+    color: "#ffe01b",
+    icon: "Megaphone",
+    description: "Audience members CRUD + campaign send (Marketing API v3)",
+    defaultLabel: "Mailchimp",
+    defaultConfig: defaultMailchimpConfig,
+    handles: ACTION_HANDLES,
+  },
+  google_drive: {
+    label: "Google Drive",
+    category: "integrations",
+    color: "#4285f4",
+    icon: "FolderOpen",
+    description: "List / get / upload / delete / share Drive files",
+    defaultLabel: "Drive",
+    defaultConfig: defaultGoogleDriveConfig,
+    handles: ACTION_HANDLES,
+  },
+  dropbox: {
+    label: "Dropbox",
+    category: "integrations",
+    color: "#0061ff",
+    icon: "Box",
+    description: "Upload / download / list / delete files + shared links",
+    defaultLabel: "Dropbox",
+    defaultConfig: defaultDropboxConfig,
+    handles: ACTION_HANDLES,
+  },
+  datadog: {
+    label: "Datadog",
+    category: "integrations",
+    color: "#632ca6",
+    icon: "Activity",
+    description: "Submit metrics / post events / submit logs to Datadog",
+    defaultLabel: "Datadog",
+    defaultConfig: defaultDatadogConfig,
+    handles: ACTION_HANDLES,
+  },
+  paypal: {
+    label: "PayPal",
+    category: "integrations",
+    color: "#003087",
+    icon: "Wallet",
+    description: "Orders + payments (create/get/capture/refund) via PayPal REST v2",
+    defaultLabel: "PayPal",
+    defaultConfig: defaultPaypalConfig,
+    handles: ACTION_HANDLES,
+  },
+  square: {
+    label: "Square",
+    category: "integrations",
+    color: "#3e4348",
+    icon: "Square",
+    description: "Payments, customers, catalog — Square REST",
+    defaultLabel: "Square",
+    defaultConfig: defaultSquareConfig,
+    handles: ACTION_HANDLES,
+  },
+  resend: {
+    label: "Resend",
+    category: "integrations",
+    color: "#000000",
+    icon: "Mail",
+    description: "Transactional email via Resend (send / get)",
+    defaultLabel: "Resend",
+    defaultConfig: defaultResendConfig,
+    handles: ACTION_HANDLES,
+  },
+  onedrive: {
+    label: "OneDrive",
+    category: "integrations",
+    color: "#0364b8",
+    icon: "Cloud",
+    description: "List / get / upload / delete / share OneDrive files (Graph)",
+    defaultLabel: "OneDrive",
+    defaultConfig: defaultOneDriveConfig,
+    handles: ACTION_HANDLES,
+  },
+  box: {
+    label: "Box",
+    category: "integrations",
+    color: "#0061d5",
+    icon: "Archive",
+    description: "Upload / download / list / share files in Box",
+    defaultLabel: "Box",
+    defaultConfig: defaultBoxConfig,
+    handles: ACTION_HANDLES,
+  },
+  circleci: {
+    label: "CircleCI",
+    category: "integrations",
+    color: "#161616",
+    icon: "RefreshCw",
+    description: "Trigger / query pipelines, cancel workflows (REST v2)",
+    defaultLabel: "CircleCI",
+    defaultConfig: defaultCircleCIConfig,
+    handles: ACTION_HANDLES,
+  },
+  whatsapp_business: {
+    label: "WhatsApp",
+    category: "integrations",
+    color: "#25d366",
+    icon: "MessageCircle",
+    description:
+      "Send text / template / media messages via WhatsApp Business Cloud API",
+    defaultLabel: "WhatsApp",
+    defaultConfig: defaultWhatsappConfig,
+    handles: ACTION_HANDLES,
+  },
+  pipedrive: {
+    label: "Pipedrive",
+    category: "integrations",
+    color: "#017737",
+    icon: "TrendingUp",
+    description: "Deals, persons, activities CRUD + search (Pipedrive v1)",
+    defaultLabel: "Pipedrive",
+    defaultConfig: defaultPipedriveConfig,
+    handles: ACTION_HANDLES,
+  },
+  customer_io: {
+    label: "Customer.io",
+    category: "integrations",
+    color: "#7d2bff",
+    icon: "UserCheck",
+    description: "Identify / track events, delete customer, send transactional",
+    defaultLabel: "Customer.io",
+    defaultConfig: defaultCustomerIoConfig,
+    handles: ACTION_HANDLES,
+  },
+
+  // ── Phase 3: Streaming + Analytics (native drivers) ───────────────────────
+
+  kafka: {
+    label: "Kafka",
+    category: "communication",
+    color: "#231f20",
+    icon: "Radio",
+    description: "Produce / consume messages on Apache Kafka topics (kafkajs)",
+    defaultLabel: "Kafka",
+    defaultConfig: defaultKafkaConfig,
+    handles: ACTION_HANDLES,
+  },
+  nats: {
+    label: "NATS",
+    category: "communication",
+    color: "#27aae1",
+    icon: "Radio",
+    description: "Publish / request / subscribe (NATS + JetStream)",
+    defaultLabel: "NATS",
+    defaultConfig: defaultNatsConfig,
+    handles: ACTION_HANDLES,
+  },
+  snowflake: {
+    label: "Snowflake",
+    category: "data_storage",
+    color: "#29b5e8",
+    icon: "Snowflake",
+    description: "Run SQL against Snowflake (node-snowflake-sdk)",
+    defaultLabel: "Snowflake",
+    defaultConfig: defaultSnowflakeConfig,
+    handles: ACTION_HANDLES,
+  },
+  clickhouse: {
+    label: "ClickHouse",
+    category: "data_storage",
+    color: "#faff69",
+    icon: "Database",
+    description: "Query / insert / command on ClickHouse (@clickhouse/client)",
+    defaultLabel: "ClickHouse",
+    defaultConfig: defaultClickhouseConfig,
+    handles: ACTION_HANDLES,
+  },
+  elasticsearch: {
+    label: "Elasticsearch",
+    category: "data_storage",
+    color: "#f0bf1a",
+    icon: "Search",
+    description: "Index / get / update / delete / search / bulk (official client)",
+    defaultLabel: "Elasticsearch",
+    defaultConfig: defaultElasticsearchConfig,
+    handles: ACTION_HANDLES,
+  },
+
+  // ── Phase 4: AI ecosystem ──────────────────────────────────────────────────
+
+  ai_image: {
+    label: "AI Image",
+    category: "ai_agents",
+    color: "#F9D923",
+    icon: "Image",
+    description: "Generate images (OpenAI DALL·E / Stability AI)",
+    defaultLabel: "AI Image",
+    defaultConfig: defaultAiImageConfig,
+    handles: ACTION_HANDLES,
+  },
+  ai_transcribe: {
+    label: "AI Transcribe",
+    category: "ai_agents",
+    color: "#F9D923",
+    icon: "Mic",
+    description: "Speech-to-text (OpenAI Whisper / AssemblyAI)",
+    defaultLabel: "AI Transcribe",
+    defaultConfig: defaultAiTranscribeConfig,
+    handles: ACTION_HANDLES,
+  },
+  ai_tts: {
+    label: "AI TTS",
+    category: "ai_agents",
+    color: "#F9D923",
+    icon: "Volume2",
+    description: "Text-to-speech (OpenAI TTS / ElevenLabs) — returns audio base64",
+    defaultLabel: "AI TTS",
+    defaultConfig: defaultAiTtsConfig,
+    handles: ACTION_HANDLES,
+  },
+  ai_embed: {
+    label: "AI Embed",
+    category: "ai_agents",
+    color: "#F9D923",
+    icon: "Binary",
+    description: "Text → vector (OpenAI / Cohere / Hugging Face)",
+    defaultLabel: "AI Embed",
+    defaultConfig: defaultAiEmbedConfig,
+    handles: ACTION_HANDLES,
+  },
+  vector_db: {
+    label: "Vector DB",
+    category: "data_storage",
+    color: "#2EB086",
+    icon: "LayoutGrid",
+    description: "Upsert / query / delete / fetch (Pinecone / Weaviate / Qdrant)",
+    defaultLabel: "Vector DB",
+    defaultConfig: defaultVectorDbConfig,
     handles: ACTION_HANDLES,
   },
 };

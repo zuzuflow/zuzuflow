@@ -77,12 +77,76 @@ components:
               * `group` — canvas-only container that visually groups child
                 nodes. Has no execution semantics: children declare their
                 parent via `parentId` and the GraphInterpreter no-ops the kind.
-              * `azure_blob` — Azure Blob Storage (uploadBlob / downloadBlob /
-                listBlobs / deleteBlob / getBlobProperties). First-class Azure
-                Cloud node; credential payload accepts connection string,
-                (accountName + accountKey), or (accountName + sasToken).
-                More Azure / GCP / Oracle Cloud natives are in progress — see
-                the roadmap for the full Phase 1 list.
+              * Azure: `azure_blob`, `azure_service_bus`, `azure_cosmos_db`,
+                `azure_key_vault`, `azure_functions` — native Azure Cloud
+                nodes. Share the `azure` credential kind; fields vary by
+                auth style (connection string / shared key / SAS / service
+                principal / function key). Key Vault requires a Service
+                Principal + vault URL.
+              * Google Cloud: `gcp_storage`, `gcp_pubsub`, `gcp_bigquery` —
+                first-class GCP nodes. All use the `gcp` credential kind
+                (service account JSON).
+              * Oracle Cloud: `oracle_db`, `oci_object_storage` — Oracle
+                Database queries via node-oracledb's Thin client and OCI
+                Object Storage via signed-request auth. Use the `oracle`
+                and `oci` credential kinds respectively.
+              * SaaS Integrations (Phase 2 — 29 nodes): `stripe`, `github`,
+                `discord`, `notion`, `salesforce`, `jira`, `ms_teams`,
+                `hubspot`, `airtable`, `pagerduty`, `gitlab`, `linear`,
+                `telegram`, `sendgrid`, `sentry`, `shopify`, `mailchimp`,
+                `google_drive`, `dropbox`, `datadog`, `paypal`, `square`,
+                `resend`, `onedrive`, `box`, `circleci`, `whatsapp_business`,
+                `pipedrive`, `customer_io` — first-class natives using each
+                provider's official SDK where available (Octokit for GitHub,
+                `stripe` Node SDK, `@notionhq/client`, `jsforce`,
+                `@sendgrid/mail`, `googleapis` for Drive) and the provider's
+                REST / GraphQL API over HTTP otherwise. Each has its own
+                credential kind with a minimal shape:
+                `stripe` = `{ apiKey }`, `github` = `{ token }`, `discord` =
+                `{ webhookUrl }` or `{ botToken }`, `notion` = `{ token }`,
+                `salesforce` = `{ loginUrl, username, password, securityToken }`
+                or `{ instanceUrl, accessToken }`, `jira` = `{ baseUrl, email,
+                apiToken }`, `ms_teams` = `{ webhookUrl }`, `hubspot` =
+                `{ privateAppToken }` or `{ apiKey }`, `airtable` =
+                `{ apiKey }`, `pagerduty` = `{ routingKey }` or `{ apiToken }`,
+                `gitlab` = `{ baseUrl?, token }`, `linear` = `{ apiKey }`,
+                `telegram` = `{ botToken }`, `sendgrid` = `{ apiKey }`,
+                `sentry` = `{ dsn }` (Store API) or `{ authToken,
+                organizationSlug, projectSlug }` (REST API), `shopify` =
+                `{ shopDomain, accessToken }`, `mailchimp` = `{ apiKey }`
+                (must include -dc suffix, e.g. "abc-us21"), `google_drive`
+                uses the `gcp` kind `{ serviceAccountJson }` or
+                `google_drive_oauth` `{ accessToken }`, `dropbox` =
+                `{ accessToken }`, `datadog` = `{ apiKey, appKey?, site? }`,
+                `paypal` = `{ clientId, clientSecret, environment? }`,
+                `square` = `{ accessToken, environment? }`, `resend` =
+                `{ apiKey }`, `onedrive` = `{ accessToken }`, `box` =
+                `{ accessToken }`, `circleci` = `{ token }`,
+                `whatsapp_business` = `{ accessToken, phoneNumberId }`,
+                `pipedrive` = `{ apiToken, companyDomain }`, `customer_io` =
+                `{ siteId, apiKey, appApiKey?, region? }`.
+              * Streaming + Analytics (Phase 3 — 5 nodes): `kafka`, `nats`,
+                `snowflake`, `clickhouse`, `elasticsearch` — native driver
+                activities (kafkajs, nats.js, snowflake-sdk,
+                @clickhouse/client, @elastic/elasticsearch) with lazy imports
+                at the activity boundary. Credential shapes:
+                `kafka` = `{ brokers, clientId?, ssl?, sasl?, saslMechanism?,
+                username?, password? }` (brokers is a CSV list),
+                `nats` = `{ servers, user?, pass?, token? }`, `snowflake` =
+                `{ account, username, password? | privateKey?, database?,
+                schema?, warehouse?, role? }`, `clickhouse` =
+                `{ url, username?, password?, database? }`, `elasticsearch` =
+                `{ node, apiKey? | (username + password), ca? }`.
+              * AI ecosystem (Phase 4 — 5 nodes): `ai_image`, `ai_transcribe`,
+                `ai_tts`, `ai_embed`, `vector_db` — each is multi-provider
+                with a `provider` selector. Credentials are shared with or
+                added alongside existing LLM kinds: `ai_image` uses `openai`
+                or new `stability`; `ai_transcribe` uses `openai` or new
+                `assemblyai`; `ai_tts` uses `openai` or new `elevenlabs`;
+                `ai_embed` uses `openai` / new `cohere` / `huggingface`;
+                `vector_db` selects one of `pinecone` = `{ apiKey, indexHost }`,
+                `weaviate` = `{ url, apiKey? }`, or `qdrant` =
+                `{ url, apiKey? }`.
           example: http_request
         label:
           type: string

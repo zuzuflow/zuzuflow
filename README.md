@@ -15,7 +15,7 @@ Built on React, Temporal, and PostgreSQL. MIT licensed.
 - **Self-hostable.** Docker Compose for local, Kubernetes manifests for production. No cloud lock-in, no per-execution metering.
 - **Developer-first.** TypeScript SDK, REST API, webhooks, and an External Trigger node for calling workflows from your own code.
 - **Observable.** Every execution is inspectable in the Temporal UI — per-node logs, timings, retries, payloads.
-- **Extensible.** 50+ built-in nodes (HTTP, databases, AWS, Slack, email, AI, …) plus an in-app **Custom Node Builder** — author reusable node kinds from the UI (sandboxed TypeScript or parameterised HTTP), with AI-assisted drafting and cross-environment git sync. See [docs/CUSTOM_NODES.md](./docs/CUSTOM_NODES.md).
+- **110+ built-in nodes.** First-class natives across every major category — HTTP, all four hyperscalers (AWS, Azure, GCP, Oracle Cloud), the top SaaS (Stripe, GitHub, Salesforce, HubSpot, Notion, Slack, Discord, MS Teams, Jira, Linear, Telegram, WhatsApp, Shopify, PayPal, Square, Mailchimp, SendGrid, Resend, PagerDuty, Datadog, Sentry, Dropbox, OneDrive, Box, Google Drive, Airtable, Pipedrive, CircleCI, GitLab, Customer.io …), streaming + analytics (Kafka, NATS, Snowflake, ClickHouse, Elasticsearch), the AI ecosystem (DALL·E + Stable Diffusion, Whisper + AssemblyAI, OpenAI TTS + ElevenLabs, embeddings, Pinecone/Weaviate/Qdrant) — plus an in-app **Custom Node Builder** for the long tail (sandboxed TypeScript or parameterised HTTP, AI-assisted drafting, cross-environment git sync). See [docs/CUSTOM_NODES.md](./docs/CUSTOM_NODES.md).
 
 ---
 
@@ -23,8 +23,8 @@ Built on React, Temporal, and PostgreSQL. MIT licensed.
 
 | Capability | Details |
 |---|---|
-| **Visual canvas** | Drag-and-drop nodes, live theming, BPMN-inspired light mode |
-| **Triggers** | Webhooks, schedules (cron), manual runs, external SDK calls |
+| **Visual canvas** | Drag-and-drop nodes, live theming, BPMN-inspired light mode, multi-select + grouping with lockable containers ([docs/CANVAS.md](./docs/CANVAS.md)) |
+| **Triggers** | Webhooks, schedules (cron), Immediate trigger with typed static payload, external SDK calls |
 | **Subworkflows** | Reusable canvases called from other workflows, with typed I/O |
 | **Credentials vault** | AES-256-GCM encrypted, per-environment scoping |
 | **Variables** | Plain and secret — referenced in any node via `{{ vars.name }}` |

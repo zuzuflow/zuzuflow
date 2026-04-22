@@ -75,7 +75,60 @@ export type NodeKind =
   | "aws_eventbridge"
   | "aws_step_functions"
   // ── Azure Cloud ──────────────────────────────────────────────────────────────
-  | "azure_blob";
+  | "azure_blob"
+  | "azure_service_bus"
+  | "azure_cosmos_db"
+  | "azure_key_vault"
+  | "azure_functions"
+  // ── Google Cloud ─────────────────────────────────────────────────────────────
+  | "gcp_storage"
+  | "gcp_pubsub"
+  | "gcp_bigquery"
+  // ── Oracle Cloud ─────────────────────────────────────────────────────────────
+  | "oracle_db"
+  | "oci_object_storage"
+  // ── SaaS Integrations (Phase 2) ──────────────────────────────────────────────
+  | "stripe"
+  | "github"
+  | "discord"
+  | "notion"
+  | "salesforce"
+  | "jira"
+  | "ms_teams"
+  | "hubspot"
+  | "airtable"
+  | "pagerduty"
+  | "gitlab"
+  | "linear"
+  | "telegram"
+  | "sendgrid"
+  | "sentry"
+  | "shopify"
+  | "mailchimp"
+  | "google_drive"
+  | "dropbox"
+  | "datadog"
+  | "paypal"
+  | "square"
+  | "resend"
+  | "onedrive"
+  | "box"
+  | "circleci"
+  | "whatsapp_business"
+  | "pipedrive"
+  | "customer_io"
+  // ── Phase 3: Streaming + Analytics natives ───────────────────────────────────
+  | "kafka"
+  | "nats"
+  | "snowflake"
+  | "clickhouse"
+  | "elasticsearch"
+  // ── Phase 4: AI ecosystem ────────────────────────────────────────────────────
+  | "ai_image"
+  | "ai_transcribe"
+  | "ai_tts"
+  | "ai_embed"
+  | "vector_db";
 
 // =============================================================================
 // Trigger node configs
@@ -1049,6 +1102,1644 @@ export interface AzureBlobConfig {
   maxResults?: number;
 }
 
+export type AzureServiceBusOperation =
+  | "sendMessage"
+  | "receiveMessages"
+  | "peekMessages";
+
+export interface AzureServiceBusConfig {
+  credentialId?: string;
+  operation: AzureServiceBusOperation;
+  /** Queue or topic name — supports {{}} interpolation */
+  entityName: string;
+  /** Subscription name for topics (receiveMessages / peekMessages only) */
+  subscriptionName?: string;
+  /** Message body for sendMessage — supports {{}} interpolation */
+  messageBody?: string;
+  /** Optional content type header */
+  contentType?: string;
+  /** Max messages to receive / peek (default 1, max 100) */
+  maxMessages?: number;
+  /** Max wait time in seconds for receiveMessages */
+  maxWaitTimeSeconds?: number;
+}
+
+export type AzureCosmosOperation =
+  | "query"
+  | "upsertItem"
+  | "readItem"
+  | "deleteItem";
+
+export interface AzureCosmosConfig {
+  credentialId?: string;
+  operation: AzureCosmosOperation;
+  /** Database ID — supports {{}} interpolation */
+  databaseId: string;
+  /** Container ID — supports {{}} interpolation */
+  containerId: string;
+  /** Item ID for readItem / deleteItem / upsertItem — supports {{}} */
+  itemId?: string;
+  /** Partition-key value — supports {{}} interpolation */
+  partitionKey?: string;
+  /** SQL query for `query` operation (use @params with parameters) */
+  query?: string;
+  /** JSON array of { name, value } parameter objects — supports {{}} */
+  queryParameters?: string;
+  /** JSON body for upsertItem — supports {{}} */
+  item?: string;
+  /** Max items returned per query (default 100) */
+  maxItems?: number;
+}
+
+export type AzureKeyVaultOperation =
+  | "getSecret"
+  | "setSecret"
+  | "listSecrets"
+  | "deleteSecret";
+
+export interface AzureKeyVaultConfig {
+  credentialId?: string;
+  operation: AzureKeyVaultOperation;
+  /** Secret name — supports {{}} (not required for listSecrets) */
+  secretName?: string;
+  /** Optional version for getSecret */
+  secretVersion?: string;
+  /** Value for setSecret — supports {{}}. Kept raw, no interpolation strip. */
+  secretValue?: string;
+}
+
+export interface AzureFunctionsConfig {
+  credentialId?: string;
+  /** Full function URL (code= querystring optional — credential.functionKey appended when set) */
+  functionUrl: string;
+  /** HTTP method, default POST */
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  /** JSON body — supports {{}} */
+  body?: string;
+  /** Extra headers — supports {{}} in both key and value */
+  headers?: Array<{ key: string; value: string }>;
+  /** Request timeout in ms, default 30000 */
+  timeoutMs?: number;
+}
+
+// =============================================================================
+// Google Cloud node configs
+// =============================================================================
+
+export type GcpStorageOperation =
+  | "uploadObject"
+  | "downloadObject"
+  | "listObjects"
+  | "deleteObject";
+
+export interface GcpStorageConfig {
+  credentialId?: string;
+  operation: GcpStorageOperation;
+  /** Bucket name — supports {{}} */
+  bucket: string;
+  /** Object name / path — supports {{}} (not required for listObjects) */
+  object?: string;
+  /** Body for uploadObject — supports {{}} */
+  content?: string;
+  /** MIME type for uploadObject */
+  contentType?: string;
+  /** Prefix filter for listObjects */
+  prefix?: string;
+  /** Max results for listObjects (default 100) */
+  maxResults?: number;
+}
+
+export type GcpPubSubOperation = "publish" | "pull" | "ack";
+
+export interface GcpPubSubConfig {
+  credentialId?: string;
+  operation: GcpPubSubOperation;
+  /** Topic name for publish (short name, not full projects/.../topics/...) */
+  topic?: string;
+  /** Subscription name for pull / ack */
+  subscription?: string;
+  /** Message body for publish — supports {{}} */
+  messageBody?: string;
+  /** JSON object of message attributes — supports {{}} */
+  attributes?: string;
+  /** Max messages to pull (default 10, max 1000) */
+  maxMessages?: number;
+  /** ackId(s) for ack — comma-separated list, supports {{}} */
+  ackIds?: string;
+}
+
+export type GcpBigQueryOperation = "query" | "insertRows";
+
+export interface GcpBigQueryConfig {
+  credentialId?: string;
+  operation: GcpBigQueryOperation;
+  /** Project ID — falls back to the credential's project_id */
+  projectId?: string;
+  /** SQL query for `query` — supports {{}} */
+  query?: string;
+  /** Use legacy SQL (default false, i.e. Standard SQL) */
+  useLegacySql?: boolean;
+  /** Query parameters as JSON object — supports {{}} */
+  queryParameters?: string;
+  /** Dataset ID for insertRows */
+  datasetId?: string;
+  /** Table ID for insertRows */
+  tableId?: string;
+  /** JSON array of rows for insertRows — supports {{}} */
+  rows?: string;
+  /** Max results for query (default 100) */
+  maxResults?: number;
+}
+
+// =============================================================================
+// Oracle Cloud node configs
+// =============================================================================
+
+export interface OracleDbConfig {
+  credentialId?: string;
+  /** Connection string (TNS / EZ connect) — overrides credential's connectString when set */
+  connectString?: string;
+  /** Parameterized SQL — use :bind placeholders */
+  query: string;
+  /** JSON object or array of bind params — supports {{}} */
+  binds?: string;
+  /** Commit immediately after the statement (default true for DML) */
+  autoCommit?: boolean;
+  /** Max rows returned (default 1000) */
+  maxRows?: number;
+}
+
+export type OciObjectStorageOperation =
+  | "putObject"
+  | "getObject"
+  | "listObjects"
+  | "deleteObject";
+
+export interface OciObjectStorageConfig {
+  credentialId?: string;
+  operation: OciObjectStorageOperation;
+  /** Namespace — falls back to credential.namespace when omitted */
+  namespace?: string;
+  /** Bucket name — supports {{}} */
+  bucket: string;
+  /** Object name for put / get / delete — supports {{}} */
+  object?: string;
+  /** Body for putObject — supports {{}} */
+  content?: string;
+  /** MIME type for putObject */
+  contentType?: string;
+  /** Prefix filter for listObjects */
+  prefix?: string;
+  /** Max results for listObjects (default 100) */
+  maxResults?: number;
+}
+
+// =============================================================================
+// SaaS Integration node configs (Phase 2)
+// =============================================================================
+
+// ─── Stripe ──────────────────────────────────────────────────────────────────
+
+export type StripeOperation =
+  | "charges.create"
+  | "charges.retrieve"
+  | "charges.refund"
+  | "customers.create"
+  | "customers.retrieve"
+  | "customers.update"
+  | "paymentIntents.create"
+  | "paymentIntents.retrieve"
+  | "paymentIntents.capture"
+  | "subscriptions.create"
+  | "subscriptions.cancel"
+  | "invoices.create"
+  | "invoices.send";
+
+/**
+ * Stripe — credential payload should carry `{ apiKey: "sk_test_..." }`.
+ * Uses the official `stripe` Node SDK (idempotent by default via idempotencyKey).
+ */
+export interface StripeConfig {
+  credentialId?: string;
+  operation: StripeOperation;
+  /** Resource ID for retrieve / update / refund / cancel / capture / send — supports {{}} */
+  resourceId?: string;
+  /** Amount in the smallest currency unit (e.g. cents) — supports {{}} */
+  amount?: string;
+  /** ISO 4217 currency code — default "usd" */
+  currency?: string;
+  /** Customer ID for charges / subscriptions — supports {{}} */
+  customerId?: string;
+  /** Payment source / method — supports {{}} */
+  source?: string;
+  /** Description — supports {{}} */
+  description?: string;
+  /** Metadata JSON object — supports {{}} */
+  metadata?: string;
+  /** Extra params JSON object (merged into call) — supports {{}} */
+  extraParams?: string;
+  /** Idempotency key — supports {{}} */
+  idempotencyKey?: string;
+}
+
+// ─── GitHub ──────────────────────────────────────────────────────────────────
+
+export type GithubOperation =
+  | "issues.create"
+  | "issues.update"
+  | "issues.get"
+  | "issues.list"
+  | "issues.createComment"
+  | "pulls.create"
+  | "pulls.merge"
+  | "pulls.list"
+  | "repos.get"
+  | "repos.listForAuthenticatedUser"
+  | "repos.createDispatchEvent"
+  | "actions.createWorkflowDispatch";
+
+/**
+ * GitHub — credential payload should carry `{ token: "ghp_..." }`.
+ * Uses the Octokit REST SDK.
+ */
+export interface GithubConfig {
+  credentialId?: string;
+  operation: GithubOperation;
+  /** Repo owner (user / org) — supports {{}} */
+  owner?: string;
+  /** Repo name — supports {{}} */
+  repo?: string;
+  /** Issue / PR / comment number — supports {{}} */
+  number?: string;
+  /** Title — supports {{}} */
+  title?: string;
+  /** Body / markdown — supports {{}} */
+  body?: string;
+  /** Labels (comma-separated) — supports {{}} */
+  labels?: string;
+  /** Assignees (comma-separated) — supports {{}} */
+  assignees?: string;
+  /** Source branch for pulls.create — supports {{}} */
+  head?: string;
+  /** Target branch for pulls.create — supports {{}} */
+  base?: string;
+  /** State filter for issues.list / pulls.list */
+  state?: "open" | "closed" | "all";
+  /** Workflow ID / filename for actions.createWorkflowDispatch — supports {{}} */
+  workflowId?: string;
+  /** Ref (branch/tag) for workflow dispatch — supports {{}} */
+  ref?: string;
+  /** JSON inputs for workflow dispatch — supports {{}} */
+  inputs?: string;
+  /** Event type for repos.createDispatchEvent — supports {{}} */
+  eventType?: string;
+  /** JSON client_payload for dispatch — supports {{}} */
+  clientPayload?: string;
+}
+
+// ─── Discord ─────────────────────────────────────────────────────────────────
+
+export type DiscordOperation =
+  | "sendWebhookMessage"
+  | "sendChannelMessage"
+  | "addReaction";
+
+/**
+ * Discord — credential shapes:
+ *   - Webhook messages: `{ webhookUrl }` (no auth otherwise).
+ *   - Channel messages: `{ botToken }` (bot user token starting with "Bot ").
+ */
+export interface DiscordConfig {
+  credentialId?: string;
+  operation: DiscordOperation;
+  /** Channel ID for channel message / reaction — supports {{}} */
+  channelId?: string;
+  /** Message ID for reactions — supports {{}} */
+  messageId?: string;
+  /** Text content — supports {{}} */
+  content?: string;
+  /** Emoji (unicode or name:id) — supports {{}} */
+  emoji?: string;
+  /** Override bot username for webhook messages — supports {{}} */
+  username?: string;
+  /** Avatar URL override for webhook messages — supports {{}} */
+  avatarUrl?: string;
+  /** Embeds JSON array — supports {{}} */
+  embeds?: string;
+  /** Use TTS for channel message */
+  tts?: boolean;
+}
+
+// ─── Notion ──────────────────────────────────────────────────────────────────
+
+export type NotionOperation =
+  | "pages.create"
+  | "pages.retrieve"
+  | "pages.update"
+  | "blocks.append"
+  | "blocks.children"
+  | "databases.query"
+  | "databases.retrieve"
+  | "search";
+
+/**
+ * Notion — credential payload: `{ token: "secret_..." }` (Internal Integration Token).
+ * Uses the `@notionhq/client` SDK.
+ */
+export interface NotionConfig {
+  credentialId?: string;
+  operation: NotionOperation;
+  /** Parent page ID (for pages.create with page parent) — supports {{}} */
+  parentPageId?: string;
+  /** Database ID (for pages.create / databases.query / databases.retrieve) — supports {{}} */
+  databaseId?: string;
+  /** Page ID for retrieve / update / blocks.append / blocks.children — supports {{}} */
+  pageId?: string;
+  /** Block ID for blocks.append / blocks.children — supports {{}} */
+  blockId?: string;
+  /** JSON object of Notion properties (shape per property type) — supports {{}} */
+  properties?: string;
+  /** JSON array of block children — supports {{}} */
+  children?: string;
+  /** JSON filter for databases.query — supports {{}} */
+  filter?: string;
+  /** JSON sort array for databases.query — supports {{}} */
+  sorts?: string;
+  /** Free-text search query */
+  query?: string;
+  /** Page size (default 100, max 100) */
+  pageSize?: number;
+  /** Start cursor for pagination — supports {{}} */
+  startCursor?: string;
+  /** If true, page / block is archived (for pages.update) */
+  archived?: boolean;
+}
+
+// ─── Salesforce ──────────────────────────────────────────────────────────────
+
+export type SalesforceOperation =
+  | "query"
+  | "sobject.create"
+  | "sobject.retrieve"
+  | "sobject.update"
+  | "sobject.delete"
+  | "sobject.upsert"
+  | "describe"
+  | "apex.rest";
+
+/**
+ * Salesforce — credential shapes supported:
+ *   - `{ loginUrl, username, password, securityToken }` — SOAP login (username/password+token).
+ *   - `{ instanceUrl, accessToken }` — OAuth bearer (session token already acquired).
+ * Uses the `jsforce` SDK.
+ */
+export interface SalesforceConfig {
+  credentialId?: string;
+  operation: SalesforceOperation;
+  /** Object API name (e.g. "Account", "Contact") — supports {{}} */
+  sobject?: string;
+  /** Record ID for retrieve / update / delete / upsert — supports {{}} */
+  recordId?: string;
+  /** External ID field name for upsert */
+  externalIdField?: string;
+  /** SOQL query string — supports {{}} */
+  soql?: string;
+  /** JSON record body for create / update / upsert — supports {{}} */
+  record?: string;
+  /** Apex REST path ("/services/apexrest/..." minus the prefix) — supports {{}} */
+  apexPath?: string;
+  /** HTTP method for apex.rest (default GET) */
+  apexMethod?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  /** JSON body for apex.rest — supports {{}} */
+  apexBody?: string;
+  /** Max rows returned from query (default 2000) */
+  maxRows?: number;
+}
+
+// ─── Jira ────────────────────────────────────────────────────────────────────
+
+export type JiraOperation =
+  | "issues.create"
+  | "issues.get"
+  | "issues.update"
+  | "issues.transition"
+  | "issues.addComment"
+  | "issues.search";
+
+/**
+ * Jira Cloud REST v3. Credential shape:
+ *   `{ baseUrl, email, apiToken }` — baseUrl like "https://mycorp.atlassian.net".
+ */
+export interface JiraConfig {
+  credentialId?: string;
+  operation: JiraOperation;
+  /** Project key (e.g. "PROJ") — required for issues.create */
+  projectKey?: string;
+  /** Issue type name — required for issues.create (e.g. "Bug", "Task") */
+  issueType?: string;
+  /** Issue key (e.g. "PROJ-123") for get/update/transition/addComment */
+  issueKey?: string;
+  /** Summary — supports {{}} */
+  summary?: string;
+  /** Description (Atlassian Document Format JSON or plain) — supports {{}} */
+  description?: string;
+  /** Labels CSV — supports {{}} */
+  labels?: string;
+  /** Assignee accountId — supports {{}} */
+  assigneeAccountId?: string;
+  /** Transition ID for issues.transition */
+  transitionId?: string;
+  /** Comment body for addComment — supports {{}} */
+  comment?: string;
+  /** JQL query for issues.search — supports {{}} */
+  jql?: string;
+  /** Fields CSV to return for search (default "*all") */
+  fields?: string;
+  /** Extra JSON merged into the fields object on create/update — supports {{}} */
+  extraFields?: string;
+  /** Max results for search (default 50, max 100) */
+  maxResults?: number;
+}
+
+// ─── Microsoft Teams ─────────────────────────────────────────────────────────
+
+export type MsTeamsOperation =
+  | "sendWebhookMessage"
+  | "sendAdaptiveCard";
+
+/**
+ * Microsoft Teams messaging via Incoming Webhook (Connector).
+ * Credential shape: `{ webhookUrl }`. Adaptive cards go via the same webhook
+ * with an `attachments` envelope.
+ */
+export interface MsTeamsConfig {
+  credentialId?: string;
+  operation: MsTeamsOperation;
+  /** Message text — supports {{}} (required for sendWebhookMessage) */
+  message?: string;
+  /** Card title for sendWebhookMessage — supports {{}} */
+  title?: string;
+  /** Theme colour (hex, no #) — sendWebhookMessage */
+  themeColor?: string;
+  /** Adaptive Card JSON (the full `attachments[0].content`) — supports {{}} */
+  cardJson?: string;
+}
+
+// ─── HubSpot ─────────────────────────────────────────────────────────────────
+
+export type HubspotOperation =
+  | "contacts.create"
+  | "contacts.update"
+  | "contacts.get"
+  | "contacts.searchByEmail"
+  | "companies.create"
+  | "companies.update"
+  | "companies.get"
+  | "deals.create"
+  | "deals.update"
+  | "deals.get";
+
+/**
+ * HubSpot CRM v3. Credential shape: `{ privateAppToken }` (recommended) or
+ * `{ apiKey }` (legacy). Uses HTTP with Bearer auth for the private-app token.
+ */
+export interface HubspotConfig {
+  credentialId?: string;
+  operation: HubspotOperation;
+  /** Object ID for update/get — supports {{}} */
+  objectId?: string;
+  /** Email for contacts.searchByEmail — supports {{}} */
+  email?: string;
+  /** JSON `properties` object — supports {{}} */
+  properties?: string;
+  /** JSON `associations` array for create — supports {{}} */
+  associations?: string;
+}
+
+// ─── Airtable ────────────────────────────────────────────────────────────────
+
+export type AirtableOperation =
+  | "records.list"
+  | "records.get"
+  | "records.create"
+  | "records.update"
+  | "records.delete";
+
+/**
+ * Airtable REST v0. Credential shape: `{ apiKey }` (legacy key or PAT).
+ */
+export interface AirtableConfig {
+  credentialId?: string;
+  operation: AirtableOperation;
+  /** Base ID (app...) — supports {{}} */
+  baseId: string;
+  /** Table name or ID — supports {{}} */
+  table: string;
+  /** Record ID for get / update / delete — supports {{}} */
+  recordId?: string;
+  /** JSON `fields` object for create / update — supports {{}} */
+  fields?: string;
+  /** Filter formula for list — supports {{}} */
+  filterByFormula?: string;
+  /** Max records for list (default 100, max 100) */
+  maxRecords?: number;
+  /** View name for list */
+  view?: string;
+}
+
+// ─── PagerDuty ───────────────────────────────────────────────────────────────
+
+export type PagerDutyOperation =
+  | "events.trigger"
+  | "events.acknowledge"
+  | "events.resolve"
+  | "incidents.create"
+  | "incidents.list";
+
+/**
+ * PagerDuty. Two APIs:
+ *  - Events API v2 (events.*): credential shape `{ routingKey }` (integration key).
+ *  - REST API (incidents.*): credential shape `{ apiToken }` (Bearer).
+ */
+export interface PagerDutyConfig {
+  credentialId?: string;
+  operation: PagerDutyOperation;
+  /** Summary / title — supports {{}} */
+  summary?: string;
+  /** Source (hostname / service) — supports {{}} */
+  source?: string;
+  /** Severity for events.trigger */
+  severity?: "critical" | "error" | "warning" | "info";
+  /** Dedup key — supports {{}} (required for ack/resolve) */
+  dedupKey?: string;
+  /** Custom details JSON — supports {{}} */
+  customDetails?: string;
+  /** Service ID for incidents.create — supports {{}} */
+  serviceId?: string;
+  /** Escalation policy ID — supports {{}} */
+  escalationPolicyId?: string;
+  /** Requester email for REST API — supports {{}} */
+  userEmail?: string;
+  /** Status filter for incidents.list */
+  statusFilter?: string;
+  /** Max results for incidents.list (default 25, max 100) */
+  limit?: number;
+}
+
+// ─── GitLab ──────────────────────────────────────────────────────────────────
+
+export type GitlabOperation =
+  | "issues.create"
+  | "issues.get"
+  | "issues.update"
+  | "issues.list"
+  | "issues.addComment"
+  | "mergeRequests.create"
+  | "mergeRequests.merge"
+  | "mergeRequests.list"
+  | "pipelines.trigger"
+  | "projects.get";
+
+/**
+ * GitLab REST v4. Credential: `{ baseUrl?, token }` — baseUrl defaults to
+ * https://gitlab.com. `token` is a Personal or Project Access Token sent
+ * as `PRIVATE-TOKEN`.
+ */
+export interface GitlabConfig {
+  credentialId?: string;
+  operation: GitlabOperation;
+  /** Project ID (numeric or "owner/repo") — supports {{}} */
+  projectId?: string;
+  /** Issue / MR IID — supports {{}} */
+  iid?: string;
+  /** Title — supports {{}} */
+  title?: string;
+  /** Description / body — supports {{}} */
+  description?: string;
+  /** Labels CSV — supports {{}} */
+  labels?: string;
+  /** Assignee user ID(s) CSV — supports {{}} */
+  assigneeIds?: string;
+  /** State filter for issues.list / mergeRequests.list */
+  state?: "opened" | "closed" | "all" | "merged";
+  /** Source branch for mergeRequests.create — supports {{}} */
+  sourceBranch?: string;
+  /** Target branch for mergeRequests.create — supports {{}} */
+  targetBranch?: string;
+  /** Comment body for issues.addComment — supports {{}} */
+  comment?: string;
+  /** Ref (branch / tag) for pipelines.trigger — supports {{}} */
+  ref?: string;
+  /** Variables JSON object for pipelines.trigger — supports {{}} */
+  variables?: string;
+}
+
+// ─── Linear ──────────────────────────────────────────────────────────────────
+
+export type LinearOperation =
+  | "issues.create"
+  | "issues.get"
+  | "issues.update"
+  | "issues.list"
+  | "issues.addComment"
+  | "teams.list";
+
+/**
+ * Linear GraphQL. Credential: `{ apiKey }` (personal API key from
+ * linear.app/settings/api). Sent as `Authorization: <apiKey>`.
+ */
+export interface LinearConfig {
+  credentialId?: string;
+  operation: LinearOperation;
+  /** Issue ID — supports {{}} */
+  issueId?: string;
+  /** Team ID — supports {{}} (required for issues.create) */
+  teamId?: string;
+  /** Title — supports {{}} */
+  title?: string;
+  /** Description (markdown) — supports {{}} */
+  description?: string;
+  /** Priority (0 = no priority, 1 urgent, 2 high, 3 medium, 4 low) */
+  priority?: 0 | 1 | 2 | 3 | 4;
+  /** State ID — supports {{}} */
+  stateId?: string;
+  /** Assignee user ID — supports {{}} */
+  assigneeId?: string;
+  /** Labels (label IDs CSV) — supports {{}} */
+  labelIds?: string;
+  /** Comment body — supports {{}} */
+  comment?: string;
+  /** Filter JSON for issues.list — supports {{}} */
+  filter?: string;
+  /** Number of results (default 25) */
+  first?: number;
+}
+
+// ─── Telegram ────────────────────────────────────────────────────────────────
+
+export type TelegramOperation =
+  | "sendMessage"
+  | "sendPhoto"
+  | "sendDocument"
+  | "editMessageText"
+  | "answerCallbackQuery";
+
+/**
+ * Telegram Bot API. Credential: `{ botToken }` (from @BotFather).
+ */
+export interface TelegramConfig {
+  credentialId?: string;
+  operation: TelegramOperation;
+  /** Chat ID (numeric or @channelusername) — supports {{}} */
+  chatId?: string;
+  /** Message text — supports {{}} */
+  text?: string;
+  /** Parse mode */
+  parseMode?: "Markdown" | "MarkdownV2" | "HTML";
+  /** Photo URL for sendPhoto — supports {{}} */
+  photoUrl?: string;
+  /** Caption for sendPhoto — supports {{}} */
+  caption?: string;
+  /** Document URL for sendDocument — supports {{}} */
+  documentUrl?: string;
+  /** Message ID for editMessageText — supports {{}} */
+  messageId?: string;
+  /** Callback query ID for answerCallbackQuery — supports {{}} */
+  callbackQueryId?: string;
+  /** Inline keyboard JSON (array of rows of button objects) — supports {{}} */
+  replyMarkup?: string;
+  /** Disable notifications */
+  disableNotification?: boolean;
+}
+
+// ─── SendGrid ────────────────────────────────────────────────────────────────
+
+export type SendgridOperation = "mail.send";
+
+/**
+ * SendGrid transactional mail. Credential: `{ apiKey }` (`SG.` prefix).
+ * Uses the `@sendgrid/mail` SDK directly (no longer piggy-backing on Twilio).
+ */
+export interface SendgridConfig {
+  credentialId?: string;
+  operation: SendgridOperation;
+  /** From email (must be verified sender) — supports {{}} */
+  from: string;
+  /** Sender name override — supports {{}} */
+  fromName?: string;
+  /** Recipient CSV — supports {{}} */
+  to: string;
+  /** CC CSV — supports {{}} */
+  cc?: string;
+  /** BCC CSV — supports {{}} */
+  bcc?: string;
+  /** Reply-to — supports {{}} */
+  replyTo?: string;
+  /** Subject — supports {{}} */
+  subject: string;
+  /** Plain text body — supports {{}} */
+  text?: string;
+  /** HTML body — supports {{}} */
+  html?: string;
+  /** Dynamic template ID for template-based sends */
+  templateId?: string;
+  /** Dynamic template data JSON — supports {{}} */
+  dynamicTemplateData?: string;
+  /** Categories CSV for tagging — supports {{}} */
+  categories?: string;
+  /** Send at Unix timestamp — supports {{}} */
+  sendAt?: string;
+}
+
+// ─── Sentry ──────────────────────────────────────────────────────────────────
+
+export type SentryOperation =
+  | "events.captureMessage"
+  | "events.captureException"
+  | "issues.list"
+  | "issues.resolve";
+
+/**
+ * Sentry. Credential shapes depend on the operation:
+ *   - captureMessage / captureException (Store API): `{ dsn }` — the project
+ *     DSN URL. DSN parses project + public key.
+ *   - issues.list / issues.resolve (REST API): `{ authToken, organizationSlug,
+ *     projectSlug }` — Bearer `<authToken>`.
+ */
+export interface SentryConfig {
+  credentialId?: string;
+  operation: SentryOperation;
+  /** Message text — supports {{}} */
+  message?: string;
+  /** Level — defaults to "error" */
+  level?: "fatal" | "error" | "warning" | "info" | "debug";
+  /** Environment tag — supports {{}} */
+  environment?: string;
+  /** Release tag — supports {{}} */
+  release?: string;
+  /** Extra context JSON — supports {{}} */
+  extra?: string;
+  /** Tags JSON object — supports {{}} */
+  tags?: string;
+  /** Exception type for captureException — supports {{}} */
+  exceptionType?: string;
+  /** Exception value/message for captureException — supports {{}} */
+  exceptionValue?: string;
+  /** Issue ID for issues.resolve — supports {{}} */
+  issueId?: string;
+  /** Query filter for issues.list — supports {{}} */
+  query?: string;
+  /** Max results for issues.list (default 25, max 100) */
+  limit?: number;
+}
+
+// ─── Shopify ─────────────────────────────────────────────────────────────────
+
+export type ShopifyOperation =
+  | "orders.list"
+  | "orders.get"
+  | "orders.cancel"
+  | "products.list"
+  | "products.get"
+  | "products.create"
+  | "products.update"
+  | "customers.list"
+  | "customers.get"
+  | "inventory.adjust";
+
+/**
+ * Shopify Admin REST. Credential: `{ shopDomain, accessToken }`.
+ * shopDomain like "mystore.myshopify.com" (no scheme). Token is sent via
+ * the X-Shopify-Access-Token header.
+ */
+export interface ShopifyConfig {
+  credentialId?: string;
+  operation: ShopifyOperation;
+  /** Object ID for get / cancel / update — supports {{}} */
+  objectId?: string;
+  /** JSON body (e.g. product attrs) for create / update — supports {{}} */
+  body?: string;
+  /** List query params as JSON object — supports {{}} */
+  queryParams?: string;
+  /** Inventory adjustment amount (positive or negative) — supports {{}} */
+  adjustBy?: string;
+  /** Inventory item ID for inventory.adjust — supports {{}} */
+  inventoryItemId?: string;
+  /** Location ID for inventory.adjust — supports {{}} */
+  locationId?: string;
+  /** API version override — default "2024-10" */
+  apiVersion?: string;
+  /** Max results (list ops, default 50, max 250) */
+  limit?: number;
+}
+
+// ─── Mailchimp ───────────────────────────────────────────────────────────────
+
+export type MailchimpOperation =
+  | "lists.addMember"
+  | "lists.updateMember"
+  | "lists.getMember"
+  | "lists.deleteMember"
+  | "lists.getMembers"
+  | "campaigns.send"
+  | "campaigns.get";
+
+/**
+ * Mailchimp Marketing API. Credential: `{ apiKey }` where the key has the
+ * data-center suffix, e.g. "abc123-us21". The activity parses the dc.
+ */
+export interface MailchimpConfig {
+  credentialId?: string;
+  operation: MailchimpOperation;
+  /** Audience / list ID — supports {{}} */
+  listId?: string;
+  /** Campaign ID — supports {{}} */
+  campaignId?: string;
+  /** Email for member ops — supports {{}} */
+  email?: string;
+  /** Member status for add / update */
+  status?: "subscribed" | "unsubscribed" | "cleaned" | "pending" | "transactional";
+  /** JSON merge fields (e.g. FNAME/LNAME) — supports {{}} */
+  mergeFields?: string;
+  /** JSON tags array — supports {{}} */
+  tags?: string;
+  /** Max members per page (default 50, max 1000) */
+  count?: number;
+}
+
+// ─── Google Drive ────────────────────────────────────────────────────────────
+
+export type GoogleDriveOperation =
+  | "files.list"
+  | "files.get"
+  | "files.upload"
+  | "files.delete"
+  | "files.share";
+
+/**
+ * Google Drive REST v3. Credential: `{ serviceAccountJson }` (reuses the
+ * `gcp` credential shape) OR an OAuth access token `{ accessToken }`.
+ * When a service account is used, the `subject` field triggers domain-wide
+ * delegation impersonation (optional).
+ */
+export interface GoogleDriveConfig {
+  credentialId?: string;
+  operation: GoogleDriveOperation;
+  /** File ID for get / delete / share — supports {{}} */
+  fileId?: string;
+  /** File name for upload — supports {{}} */
+  name?: string;
+  /** MIME type for upload */
+  mimeType?: string;
+  /** File content (text) for upload — supports {{}} */
+  content?: string;
+  /** Parent folder ID(s) CSV for upload — supports {{}} */
+  parents?: string;
+  /** Drive query (`name contains 'foo'`, etc.) for list — supports {{}} */
+  query?: string;
+  /** Max results for list (default 100, max 1000) */
+  pageSize?: number;
+  /** Share type */
+  shareType?: "user" | "group" | "domain" | "anyone";
+  /** Share role */
+  shareRole?: "reader" | "commenter" | "writer" | "owner";
+  /** Share target email / domain — supports {{}} */
+  shareEmail?: string;
+  /** Impersonate user (domain-wide delegation) — supports {{}} */
+  impersonateUser?: string;
+}
+
+// ─── Dropbox ─────────────────────────────────────────────────────────────────
+
+export type DropboxOperation =
+  | "files.upload"
+  | "files.download"
+  | "files.listFolder"
+  | "files.delete"
+  | "sharing.createSharedLink";
+
+/**
+ * Dropbox. Credential: `{ accessToken }` — a Dropbox API access token.
+ */
+export interface DropboxConfig {
+  credentialId?: string;
+  operation: DropboxOperation;
+  /** Remote path (must start with `/`) — supports {{}} */
+  path?: string;
+  /** Content for files.upload — supports {{}} */
+  content?: string;
+  /** Upload mode */
+  mode?: "add" | "overwrite" | "update";
+  /** Folder to list */
+  folderPath?: string;
+  /** Recurse for listFolder */
+  recursive?: boolean;
+  /** Max results for listFolder (Dropbox enforces 2000 hard cap) */
+  limit?: number;
+  /** Cursor for pagination — supports {{}} */
+  cursor?: string;
+  /** Sharing link visibility */
+  linkVisibility?: "public" | "team_only" | "password";
+  /** Password for password-protected links */
+  linkPassword?: string;
+}
+
+// ─── Datadog ─────────────────────────────────────────────────────────────────
+
+export type DatadogOperation =
+  | "metrics.submit"
+  | "events.post"
+  | "logs.submit";
+
+/**
+ * Datadog. Credential: `{ apiKey, appKey?, site? }`. site defaults to
+ * "datadoghq.com". DD-API-KEY + (for some APIs) DD-APPLICATION-KEY.
+ */
+export interface DatadogConfig {
+  credentialId?: string;
+  operation: DatadogOperation;
+  /** Metric name (metrics.submit) — supports {{}} */
+  metricName?: string;
+  /** Metric value — supports {{}} */
+  metricValue?: string;
+  /** Metric type */
+  metricType?: "count" | "rate" | "gauge";
+  /** Tags CSV — supports {{}} */
+  tags?: string;
+  /** Event / log title — supports {{}} */
+  title?: string;
+  /** Event / log body text — supports {{}} */
+  text?: string;
+  /** Event alert type */
+  alertType?: "error" | "warning" | "info" | "success";
+  /** Log service name — supports {{}} */
+  service?: string;
+  /** Log host — supports {{}} */
+  host?: string;
+  /** Log status */
+  logStatus?: "ok" | "info" | "warning" | "error" | "critical";
+  /** Source type name */
+  source?: string;
+}
+
+// ─── PayPal ──────────────────────────────────────────────────────────────────
+
+export type PaypalOperation =
+  | "orders.create"
+  | "orders.get"
+  | "orders.capture"
+  | "payments.captureAuthorization"
+  | "payments.refund";
+
+/**
+ * PayPal REST v2. Credential: `{ clientId, clientSecret, environment? }`.
+ * environment defaults to "live" — set to "sandbox" for the sandbox API.
+ * The activity performs the client-credentials OAuth exchange on each call
+ * (short-lived in-memory token — no caching across workflow runs).
+ */
+export interface PaypalConfig {
+  credentialId?: string;
+  operation: PaypalOperation;
+  /** Order / authorization / capture ID — supports {{}} */
+  resourceId?: string;
+  /** Amount value (string to preserve decimal precision) — supports {{}} */
+  amount?: string;
+  /** ISO 4217 currency — default "USD" */
+  currency?: string;
+  /** Intent for orders.create */
+  intent?: "CAPTURE" | "AUTHORIZE";
+  /** Description — supports {{}} */
+  description?: string;
+  /** Extra params JSON (merged into orders.create body) — supports {{}} */
+  extraParams?: string;
+  /** PayPal-Request-Id idempotency header — supports {{}} */
+  idempotencyKey?: string;
+}
+
+// ─── Square ──────────────────────────────────────────────────────────────────
+
+export type SquareOperation =
+  | "payments.create"
+  | "payments.get"
+  | "payments.list"
+  | "customers.create"
+  | "customers.list"
+  | "catalog.listItems";
+
+/**
+ * Square Payments / Customers / Catalog. Credential: `{ accessToken,
+ * environment? }`. environment defaults to "production"; set "sandbox" to
+ * use connect.squareupsandbox.com.
+ */
+export interface SquareConfig {
+  credentialId?: string;
+  operation: SquareOperation;
+  /** Resource ID — supports {{}} */
+  resourceId?: string;
+  /** Amount in the smallest currency unit (cents) — supports {{}} */
+  amountMinor?: string;
+  /** ISO 4217 currency — default "USD" */
+  currency?: string;
+  /** Source ID (card nonce or saved source) for payments.create — supports {{}} */
+  sourceId?: string;
+  /** Idempotency key — supports {{}} */
+  idempotencyKey?: string;
+  /** Customer given name — supports {{}} */
+  givenName?: string;
+  /** Customer family name — supports {{}} */
+  familyName?: string;
+  /** Customer email — supports {{}} */
+  emailAddress?: string;
+  /** Customer phone — supports {{}} */
+  phoneNumber?: string;
+  /** Note on payment — supports {{}} */
+  note?: string;
+  /** Limit for list ops (default 100) */
+  limit?: number;
+}
+
+// ─── Resend ──────────────────────────────────────────────────────────────────
+
+export type ResendOperation = "emails.send" | "emails.get";
+
+/**
+ * Resend. Credential: `{ apiKey }` (`re_...`). Bearer auth.
+ */
+export interface ResendConfig {
+  credentialId?: string;
+  operation: ResendOperation;
+  /** From address — supports {{}} */
+  from?: string;
+  /** To CSV — supports {{}} */
+  to?: string;
+  /** CC CSV — supports {{}} */
+  cc?: string;
+  /** BCC CSV — supports {{}} */
+  bcc?: string;
+  /** Subject — supports {{}} */
+  subject?: string;
+  /** HTML body — supports {{}} */
+  html?: string;
+  /** Text body — supports {{}} */
+  text?: string;
+  /** Reply-To — supports {{}} */
+  replyTo?: string;
+  /** Tags JSON array [{"name": "...", "value": "..."}] — supports {{}} */
+  tags?: string;
+  /** Email ID for emails.get — supports {{}} */
+  emailId?: string;
+}
+
+// ─── OneDrive ────────────────────────────────────────────────────────────────
+
+export type OneDriveOperation =
+  | "files.list"
+  | "files.get"
+  | "files.upload"
+  | "files.delete"
+  | "files.createShareLink";
+
+/**
+ * Microsoft OneDrive / Graph API v1.0. Credential: `{ accessToken }` — an
+ * OAuth access token with Files.ReadWrite scope.
+ */
+export interface OneDriveConfig {
+  credentialId?: string;
+  operation: OneDriveOperation;
+  /** Item ID (preferred) — supports {{}} */
+  itemId?: string;
+  /** OR remote path from drive root (e.g. "/reports/file.txt") — supports {{}} */
+  path?: string;
+  /** Parent path for upload — supports {{}} (root if empty) */
+  parentPath?: string;
+  /** File name for upload — supports {{}} */
+  name?: string;
+  /** Content for upload — supports {{}} */
+  content?: string;
+  /** MIME type */
+  contentType?: string;
+  /** Share link type */
+  linkType?: "view" | "edit" | "embed";
+  /** Share scope */
+  linkScope?: "anonymous" | "organization";
+}
+
+// ─── Box ─────────────────────────────────────────────────────────────────────
+
+export type BoxOperation =
+  | "files.upload"
+  | "files.download"
+  | "files.get"
+  | "files.delete"
+  | "folders.list"
+  | "files.createSharedLink";
+
+/**
+ * Box Content API v2.0. Credential: `{ accessToken }` — an OAuth / JWT
+ * developer access token. Bearer auth.
+ */
+export interface BoxConfig {
+  credentialId?: string;
+  operation: BoxOperation;
+  /** File ID — supports {{}} */
+  fileId?: string;
+  /** Folder ID ("0" = root) — supports {{}} */
+  folderId?: string;
+  /** File name for upload — supports {{}} */
+  name?: string;
+  /** File content for upload — supports {{}} */
+  content?: string;
+  /** Shared link access type */
+  linkAccess?: "open" | "company" | "collaborators";
+  /** Shared link password (only valid with access=open) */
+  linkPassword?: string;
+  /** Max items for folders.list (default 100, max 1000) */
+  limit?: number;
+  /** Offset for folders.list pagination */
+  offset?: number;
+}
+
+// ─── CircleCI ────────────────────────────────────────────────────────────────
+
+export type CircleCIOperation =
+  | "pipelines.trigger"
+  | "pipelines.get"
+  | "pipelines.list"
+  | "workflows.get"
+  | "workflows.cancel"
+  | "projects.get";
+
+/**
+ * CircleCI REST v2. Credential: `{ token }` — Personal API token from
+ * circleci.com/user/tokens. Sent via Circle-Token header.
+ */
+export interface CircleCIConfig {
+  credentialId?: string;
+  operation: CircleCIOperation;
+  /** Project slug: "{vcs}/{org}/{repo}", e.g. "github/acme/myrepo" — supports {{}} */
+  projectSlug?: string;
+  /** Branch to trigger on (default "main") — supports {{}} */
+  branch?: string;
+  /** Tag to trigger on (alternative to branch) — supports {{}} */
+  tag?: string;
+  /** Pipeline ID for pipelines.get — supports {{}} */
+  pipelineId?: string;
+  /** Workflow ID for workflows.get / workflows.cancel — supports {{}} */
+  workflowId?: string;
+  /** Parameters JSON object passed to the pipeline — supports {{}} */
+  parameters?: string;
+}
+
+// ─── WhatsApp Business ───────────────────────────────────────────────────────
+
+export type WhatsappOperation =
+  | "messages.sendText"
+  | "messages.sendTemplate"
+  | "messages.sendMedia"
+  | "messages.markAsRead";
+
+/**
+ * WhatsApp Business Cloud API (Meta Graph v20.0+). Credential:
+ * `{ accessToken, phoneNumberId }`. Uses Bearer auth.
+ */
+export interface WhatsappConfig {
+  credentialId?: string;
+  operation: WhatsappOperation;
+  /** Recipient phone number in E.164 (no + required) — supports {{}} */
+  to?: string;
+  /** Text body — supports {{}} */
+  text?: string;
+  /** Disable link previews (messages.sendText) */
+  previewUrl?: boolean;
+  /** Template name — supports {{}} */
+  templateName?: string;
+  /** Template language code (default "en_US") */
+  templateLanguage?: string;
+  /** Template components JSON — supports {{}} */
+  templateComponents?: string;
+  /** Media type for sendMedia */
+  mediaType?: "image" | "document" | "audio" | "video" | "sticker";
+  /** Media URL — supports {{}} */
+  mediaUrl?: string;
+  /** Media caption (image/video/document) — supports {{}} */
+  caption?: string;
+  /** Document filename — supports {{}} */
+  filename?: string;
+  /** Message ID for markAsRead — supports {{}} */
+  messageId?: string;
+}
+
+// ─── Pipedrive ───────────────────────────────────────────────────────────────
+
+export type PipedriveOperation =
+  | "deals.create"
+  | "deals.get"
+  | "deals.update"
+  | "deals.list"
+  | "persons.create"
+  | "persons.get"
+  | "persons.update"
+  | "persons.search"
+  | "activities.create";
+
+/**
+ * Pipedrive v1 REST. Credential: `{ apiToken, companyDomain }` —
+ * companyDomain like "mycorp" (maps to mycorp.pipedrive.com). Token is sent
+ * as `api_token` query param per Pipedrive's convention.
+ */
+export interface PipedriveConfig {
+  credentialId?: string;
+  operation: PipedriveOperation;
+  /** Object ID for get / update — supports {{}} */
+  objectId?: string;
+  /** JSON body with object properties — supports {{}} */
+  body?: string;
+  /** Search term for persons.search — supports {{}} */
+  searchTerm?: string;
+  /** Fields to search (default "name,email,phone") */
+  searchFields?: string;
+  /** Max results for list / search (default 100) */
+  limit?: number;
+  /** Start offset for list pagination */
+  start?: number;
+}
+
+// ─── Customer.io ─────────────────────────────────────────────────────────────
+
+export type CustomerIoOperation =
+  | "identify"
+  | "track"
+  | "deleteCustomer"
+  | "sendTransactional";
+
+/**
+ * Customer.io. Two credential shapes used depending on op:
+ *   - Track API (identify/track/delete): `{ siteId, apiKey }` — Basic auth.
+ *     Host defaults to https://track.customer.io (US) — set `region: "eu"` for
+ *     track-eu.customer.io.
+ *   - App API (sendTransactional): `{ appApiKey }` — Bearer. Host is
+ *     https://api.customer.io (or api-eu.customer.io for EU).
+ */
+export interface CustomerIoConfig {
+  credentialId?: string;
+  operation: CustomerIoOperation;
+  /** Customer ID (email or internal ID) — supports {{}} */
+  customerId?: string;
+  /** Event name for track — supports {{}} */
+  eventName?: string;
+  /** JSON `attributes` for identify — supports {{}} */
+  attributes?: string;
+  /** JSON `data` for track / sendTransactional — supports {{}} */
+  data?: string;
+  /** Transactional message ID — supports {{}} */
+  transactionalId?: string;
+  /** Recipient email for sendTransactional — supports {{}} */
+  to?: string;
+  /** Identifier type for transactional — "id" or "email" */
+  identifierType?: "id" | "email";
+  /** Identifier value — supports {{}} */
+  identifierValue?: string;
+}
+
+// =============================================================================
+// Phase 3 — Streaming + Analytics native node configs
+// =============================================================================
+
+// ─── Kafka ───────────────────────────────────────────────────────────────────
+
+export type KafkaOperation = "produce" | "consume";
+
+/**
+ * Apache Kafka via kafkajs. Credential shape:
+ *   `{ brokers, clientId?, ssl?, sasl?, saslMechanism?, username?, password? }`
+ *   - brokers is a CSV list "host1:9092,host2:9092"
+ *   - ssl "true" / "false"
+ *   - saslMechanism: plain | scram-sha-256 | scram-sha-512
+ */
+export interface KafkaConfig {
+  credentialId?: string;
+  operation: KafkaOperation;
+  /** Topic to produce to or consume from — supports {{}} */
+  topic: string;
+  /** Message key (producer) — supports {{}} */
+  messageKey?: string;
+  /** Message value (producer) — supports {{}} */
+  messageValue?: string;
+  /** JSON object of headers (producer) — supports {{}} */
+  headers?: string;
+  /** Partition (producer) — leave blank for round-robin */
+  partition?: number;
+  /** Acks level for produce: 0 (fire-and-forget) | 1 (leader) | -1 (all) */
+  acks?: "0" | "1" | "-1";
+  /** Consumer group ID (consume) */
+  groupId?: string;
+  /** Max messages to consume in one call (default 10) */
+  maxMessages?: number;
+  /** Max wait time in ms (consume) */
+  maxWaitMs?: number;
+  /** Read from "earliest" or "latest" when no committed offset */
+  fromBeginning?: boolean;
+}
+
+// ─── NATS ────────────────────────────────────────────────────────────────────
+
+export type NatsOperation =
+  | "publish"
+  | "request"
+  | "subscribe"
+  | "jetstream.publish";
+
+/**
+ * NATS (and JetStream). Credential shape:
+ *   `{ servers, user?, pass?, token? }` — servers is a CSV list.
+ */
+export interface NatsConfig {
+  credentialId?: string;
+  operation: NatsOperation;
+  /** Subject — supports {{}} */
+  subject: string;
+  /** Message body — supports {{}} */
+  payload?: string;
+  /** Reply subject for publish (optional) — supports {{}} */
+  replyTo?: string;
+  /** JSON object of headers — supports {{}} */
+  headers?: string;
+  /** Request timeout in ms (default 5000) */
+  timeoutMs?: number;
+  /** Max messages for subscribe (default 1) */
+  maxMessages?: number;
+  /** JetStream stream name (for jetstream.publish) */
+  stream?: string;
+  /** Msg-Id header for JetStream de-duplication — supports {{}} */
+  msgId?: string;
+}
+
+// ─── Snowflake ───────────────────────────────────────────────────────────────
+
+export type SnowflakeOperation = "query" | "execute";
+
+/**
+ * Snowflake via snowflake-sdk. Credential shape:
+ *   `{ account, username, password? | privateKey?, database?, schema?,
+ *      warehouse?, role? }`.
+ *   - account like "xy12345.us-east-1"
+ *   - supply EITHER password OR privateKey (PEM) for key-pair auth.
+ */
+export interface SnowflakeConfig {
+  credentialId?: string;
+  operation: SnowflakeOperation;
+  /** SQL — supports {{}} */
+  sql: string;
+  /** JSON array of bind params (positional ?) — supports {{}} */
+  binds?: string;
+  /** Max rows to return (default 10000) */
+  maxRows?: number;
+  /** Override warehouse for this statement — supports {{}} */
+  warehouse?: string;
+  /** Override database for this statement — supports {{}} */
+  database?: string;
+  /** Override schema for this statement — supports {{}} */
+  schema?: string;
+  /** Override role for this statement — supports {{}} */
+  role?: string;
+}
+
+// ─── ClickHouse ──────────────────────────────────────────────────────────────
+
+export type ClickhouseOperation = "query" | "insert" | "command";
+
+/**
+ * ClickHouse via @clickhouse/client. Credential shape:
+ *   `{ url, username?, password?, database? }`
+ *   - url like "http://localhost:8123" or "https://my-cluster.clickhouse.cloud"
+ */
+export interface ClickhouseConfig {
+  credentialId?: string;
+  operation: ClickhouseOperation;
+  /** SQL for query / command — supports {{}} */
+  query?: string;
+  /** Named params JSON object (maps to {name: value}) — supports {{}} */
+  queryParams?: string;
+  /** Table name for insert — supports {{}} */
+  table?: string;
+  /** JSON array of rows for insert — supports {{}} */
+  rows?: string;
+  /** Response format for query (default JSONEachRow) */
+  format?:
+    | "JSON"
+    | "JSONEachRow"
+    | "JSONCompact"
+    | "CSV"
+    | "TabSeparated";
+  /** Max rows to read back for query (default 10000) */
+  maxRows?: number;
+}
+
+// ─── Elasticsearch ───────────────────────────────────────────────────────────
+
+export type ElasticsearchOperation =
+  | "index"
+  | "get"
+  | "update"
+  | "delete"
+  | "search"
+  | "bulk";
+
+/**
+ * Elasticsearch via @elastic/elasticsearch. Credential shape:
+ *   `{ node, apiKey? | (username + password), ca? }`.
+ */
+export interface ElasticsearchConfig {
+  credentialId?: string;
+  operation: ElasticsearchOperation;
+  /** Index name — supports {{}} */
+  index: string;
+  /** Document ID — supports {{}} */
+  documentId?: string;
+  /** Document body (JSON) — supports {{}} */
+  document?: string;
+  /** Search / update query DSL body (JSON) — supports {{}} */
+  body?: string;
+  /** Partial update `doc` JSON — supports {{}} */
+  doc?: string;
+  /** Operations for bulk (newline-delimited JSON) — supports {{}} */
+  operations?: string;
+  /** Refresh policy */
+  refresh?: "true" | "false" | "wait_for";
+  /** Max hits for search (default 10, max 10000) */
+  size?: number;
+  /** From offset for search */
+  from?: number;
+}
+
+// =============================================================================
+// Phase 4 — AI ecosystem node configs
+// =============================================================================
+
+// ─── AI Image (generation) ───────────────────────────────────────────────────
+
+export type AiImageProvider = "openai" | "stability";
+
+/**
+ * Image generation. Credential:
+ *   - openai: `{ apiKey }`
+ *   - stability: `{ apiKey }` (Stability AI / SD API)
+ */
+export interface AiImageConfig {
+  credentialId?: string;
+  provider: AiImageProvider;
+  /** Model name — openai: "dall-e-3" / "dall-e-2" / "gpt-image-1"; stability: "stable-diffusion-xl-1024-v1-0" etc. */
+  model: string;
+  /** Prompt — supports {{}} */
+  prompt: string;
+  /** Negative prompt (stability only) — supports {{}} */
+  negativePrompt?: string;
+  /** Image size — "1024x1024" for openai dall-e-3; "512x512" / "768x768" etc. for SD */
+  size?: string;
+  /** Quality (openai dall-e-3 only): "standard" | "hd" */
+  quality?: "standard" | "hd";
+  /** Style (openai dall-e-3 only): "vivid" | "natural" */
+  style?: "vivid" | "natural";
+  /** Number of images (openai: 1 for dall-e-3, up to 10 for dall-e-2) */
+  n?: number;
+  /** Response format — "url" | "b64_json" (openai) */
+  responseFormat?: "url" | "b64_json";
+  /** Seed (stability) */
+  seed?: number;
+  /** Steps (stability, default 30) */
+  steps?: number;
+  /** CFG scale (stability, default 7) */
+  cfgScale?: number;
+}
+
+// ─── AI Transcribe (speech-to-text) ──────────────────────────────────────────
+
+export type AiTranscribeProvider = "openai" | "assemblyai";
+
+/**
+ * Speech-to-text. Credential:
+ *   - openai: `{ apiKey }` (Whisper API)
+ *   - assemblyai: `{ apiKey }`
+ */
+export interface AiTranscribeConfig {
+  credentialId?: string;
+  provider: AiTranscribeProvider;
+  /** Model — "whisper-1" for openai; default "best" for assemblyai */
+  model?: string;
+  /** Audio URL to fetch + transcribe — supports {{}} */
+  audioUrl?: string;
+  /** Audio body as base64 (optional alternative to URL) — supports {{}} */
+  audioBase64?: string;
+  /** Audio MIME type (for base64 uploads) */
+  audioMimeType?: string;
+  /** Audio filename hint */
+  audioFilename?: string;
+  /** Language code (ISO-639-1) — supports {{}} */
+  language?: string;
+  /** OpenAI response format */
+  responseFormat?: "json" | "text" | "srt" | "verbose_json" | "vtt";
+  /** AssemblyAI: enable speaker labels */
+  speakerLabels?: boolean;
+  /** Prompt / context to steer transcription — supports {{}} */
+  prompt?: string;
+}
+
+// ─── AI TTS (text-to-speech) ─────────────────────────────────────────────────
+
+export type AiTtsProvider = "openai" | "elevenlabs";
+
+/**
+ * Text-to-speech. Credential:
+ *   - openai: `{ apiKey }`
+ *   - elevenlabs: `{ apiKey }`
+ */
+export interface AiTtsConfig {
+  credentialId?: string;
+  provider: AiTtsProvider;
+  /** Model — "tts-1" / "tts-1-hd" for openai; "eleven_multilingual_v2" etc. for ElevenLabs */
+  model?: string;
+  /** Text to synthesise — supports {{}} */
+  text: string;
+  /** Voice — openai: "alloy"/"echo"/"fable"/"onyx"/"nova"/"shimmer"; elevenlabs: voice ID */
+  voice?: string;
+  /** Output format — openai: "mp3"/"opus"/"aac"/"flac"; elevenlabs: "mp3_44100_128" etc. */
+  format?: string;
+  /** Speed (openai 0.25–4.0, default 1) */
+  speed?: number;
+  /** ElevenLabs: voice stability (0–1) */
+  stability?: number;
+  /** ElevenLabs: similarity boost (0–1) */
+  similarityBoost?: number;
+}
+
+// ─── AI Embed (text → vector) ────────────────────────────────────────────────
+
+export type AiEmbedProvider = "openai" | "cohere" | "huggingface";
+
+/**
+ * Text embeddings. Credential:
+ *   - openai: `{ apiKey }`
+ *   - cohere: `{ apiKey }`
+ *   - huggingface: `{ apiToken }` (uses feature-extraction pipeline)
+ */
+export interface AiEmbedConfig {
+  credentialId?: string;
+  provider: AiEmbedProvider;
+  /** Model — e.g. "text-embedding-3-small"; cohere "embed-english-v3.0"; HF model ID */
+  model: string;
+  /** JSON array of input strings — supports {{}} */
+  input: string;
+  /** Cohere `input_type` */
+  inputType?:
+    | "search_document"
+    | "search_query"
+    | "classification"
+    | "clustering";
+  /** OpenAI: requested dimensions (optional override, e.g. 1536 → 512) */
+  dimensions?: number;
+  /** OpenAI: encoding_format "float" | "base64" */
+  encodingFormat?: "float" | "base64";
+}
+
+// ─── Vector DB (Pinecone / Weaviate / Qdrant) ────────────────────────────────
+
+export type VectorDbProvider = "pinecone" | "weaviate" | "qdrant";
+
+export type VectorDbOperation =
+  | "upsert"
+  | "query"
+  | "delete"
+  | "fetch";
+
+/**
+ * Vector DB — driver selected at runtime.
+ *   - pinecone: `{ apiKey, indexHost }` (indexHost from pinecone-console, per index)
+ *   - weaviate: `{ url, apiKey? }` (api key for Weaviate Cloud)
+ *   - qdrant: `{ url, apiKey? }`
+ */
+export interface VectorDbConfig {
+  credentialId?: string;
+  provider: VectorDbProvider;
+  operation: VectorDbOperation;
+  /** Collection / index / class name — supports {{}} */
+  collection: string;
+  /** Namespace (Pinecone) — supports {{}} */
+  namespace?: string;
+  /** JSON array of vectors for upsert — each `{ id, values, metadata? }` — supports {{}} */
+  vectors?: string;
+  /** Query vector (JSON array of numbers) — supports {{}} */
+  queryVector?: string;
+  /** Top-k for query (default 10) */
+  topK?: number;
+  /** Filter JSON (provider-specific shape) — supports {{}} */
+  filter?: string;
+  /** IDs JSON array for fetch / delete — supports {{}} */
+  ids?: string;
+  /** Include values / metadata in query results */
+  includeValues?: boolean;
+  includeMetadata?: boolean;
+}
+
 // =============================================================================
 // Union of all node configs
 // =============================================================================
@@ -1122,7 +2813,60 @@ export type NodeConfig =
   | AwsEventBridgeConfig
   | AwsStepFunctionsConfig
   // Azure Cloud
-  | AzureBlobConfig;
+  | AzureBlobConfig
+  | AzureServiceBusConfig
+  | AzureCosmosConfig
+  | AzureKeyVaultConfig
+  | AzureFunctionsConfig
+  // Google Cloud
+  | GcpStorageConfig
+  | GcpPubSubConfig
+  | GcpBigQueryConfig
+  // Oracle Cloud
+  | OracleDbConfig
+  | OciObjectStorageConfig
+  // SaaS Integrations (Phase 2)
+  | StripeConfig
+  | GithubConfig
+  | DiscordConfig
+  | NotionConfig
+  | SalesforceConfig
+  | JiraConfig
+  | MsTeamsConfig
+  | HubspotConfig
+  | AirtableConfig
+  | PagerDutyConfig
+  | GitlabConfig
+  | LinearConfig
+  | TelegramConfig
+  | SendgridConfig
+  | SentryConfig
+  | ShopifyConfig
+  | MailchimpConfig
+  | GoogleDriveConfig
+  | DropboxConfig
+  | DatadogConfig
+  | PaypalConfig
+  | SquareConfig
+  | ResendConfig
+  | OneDriveConfig
+  | BoxConfig
+  | CircleCIConfig
+  | WhatsappConfig
+  | PipedriveConfig
+  | CustomerIoConfig
+  // Phase 3: Streaming + Analytics
+  | KafkaConfig
+  | NatsConfig
+  | SnowflakeConfig
+  | ClickhouseConfig
+  | ElasticsearchConfig
+  // Phase 4: AI ecosystem
+  | AiImageConfig
+  | AiTranscribeConfig
+  | AiTtsConfig
+  | AiEmbedConfig
+  | VectorDbConfig;
 
 // =============================================================================
 // Graph primitives

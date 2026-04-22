@@ -68,6 +68,54 @@ import { AwsSsmForm } from "./forms/AwsSsmForm";
 import { AwsEventBridgeForm } from "./forms/AwsEventBridgeForm";
 import { AwsStepFunctionsForm } from "./forms/AwsStepFunctionsForm";
 import { AzureBlobForm } from "./forms/AzureBlobForm";
+import { AzureServiceBusForm } from "./forms/AzureServiceBusForm";
+import { AzureCosmosForm } from "./forms/AzureCosmosForm";
+import { AzureKeyVaultForm } from "./forms/AzureKeyVaultForm";
+import { AzureFunctionsForm } from "./forms/AzureFunctionsForm";
+import { GcpStorageForm } from "./forms/GcpStorageForm";
+import { GcpPubSubForm } from "./forms/GcpPubSubForm";
+import { GcpBigQueryForm } from "./forms/GcpBigQueryForm";
+import { OracleDbForm } from "./forms/OracleDbForm";
+import { OciObjectStorageForm } from "./forms/OciObjectStorageForm";
+import { StripeForm } from "./forms/StripeForm";
+import { GithubForm } from "./forms/GithubForm";
+import { DiscordForm } from "./forms/DiscordForm";
+import { NotionForm } from "./forms/NotionForm";
+import { SalesforceForm } from "./forms/SalesforceForm";
+import { JiraForm } from "./forms/JiraForm";
+import { MsTeamsForm } from "./forms/MsTeamsForm";
+import { HubspotForm } from "./forms/HubspotForm";
+import { AirtableForm } from "./forms/AirtableForm";
+import { PagerDutyForm } from "./forms/PagerDutyForm";
+import { GitlabForm } from "./forms/GitlabForm";
+import { LinearForm } from "./forms/LinearForm";
+import { TelegramForm } from "./forms/TelegramForm";
+import { SendgridForm } from "./forms/SendgridForm";
+import { SentryForm } from "./forms/SentryForm";
+import { ShopifyForm } from "./forms/ShopifyForm";
+import { MailchimpForm } from "./forms/MailchimpForm";
+import { GoogleDriveForm } from "./forms/GoogleDriveForm";
+import { DropboxForm } from "./forms/DropboxForm";
+import { DatadogForm } from "./forms/DatadogForm";
+import { PaypalForm } from "./forms/PaypalForm";
+import { SquareForm } from "./forms/SquareForm";
+import { ResendForm } from "./forms/ResendForm";
+import { OneDriveForm } from "./forms/OneDriveForm";
+import { BoxForm } from "./forms/BoxForm";
+import { CircleCIForm } from "./forms/CircleCIForm";
+import { WhatsappForm } from "./forms/WhatsappForm";
+import { PipedriveForm } from "./forms/PipedriveForm";
+import { CustomerIoForm } from "./forms/CustomerIoForm";
+import { KafkaForm } from "./forms/KafkaForm";
+import { NatsForm } from "./forms/NatsForm";
+import { SnowflakeForm } from "./forms/SnowflakeForm";
+import { ClickhouseForm } from "./forms/ClickhouseForm";
+import { ElasticsearchForm } from "./forms/ElasticsearchForm";
+import { AiImageForm } from "./forms/AiImageForm";
+import { AiTranscribeForm } from "./forms/AiTranscribeForm";
+import { AiTtsForm } from "./forms/AiTtsForm";
+import { AiEmbedForm } from "./forms/AiEmbedForm";
+import { VectorDbForm } from "./forms/VectorDbForm";
 
 import type {
   ManualTriggerConfig,
@@ -126,6 +174,54 @@ import type {
   AwsEventBridgeConfig,
   AwsStepFunctionsConfig,
   AzureBlobConfig,
+  AzureServiceBusConfig,
+  AzureCosmosConfig,
+  AzureKeyVaultConfig,
+  AzureFunctionsConfig,
+  GcpStorageConfig,
+  GcpPubSubConfig,
+  GcpBigQueryConfig,
+  OracleDbConfig,
+  OciObjectStorageConfig,
+  StripeConfig,
+  GithubConfig,
+  DiscordConfig,
+  NotionConfig,
+  SalesforceConfig,
+  JiraConfig,
+  MsTeamsConfig,
+  HubspotConfig,
+  AirtableConfig,
+  PagerDutyConfig,
+  GitlabConfig,
+  LinearConfig,
+  TelegramConfig,
+  SendgridConfig,
+  SentryConfig,
+  ShopifyConfig,
+  MailchimpConfig,
+  GoogleDriveConfig,
+  DropboxConfig,
+  DatadogConfig,
+  PaypalConfig,
+  SquareConfig,
+  ResendConfig,
+  OneDriveConfig,
+  BoxConfig,
+  CircleCIConfig,
+  WhatsappConfig,
+  PipedriveConfig,
+  CustomerIoConfig,
+  KafkaConfig,
+  NatsConfig,
+  SnowflakeConfig,
+  ClickhouseConfig,
+  ElasticsearchConfig,
+  AiImageConfig,
+  AiTranscribeConfig,
+  AiTtsConfig,
+  AiEmbedConfig,
+  VectorDbConfig,
   AiAgentConfig,
 } from "@workflow/shared";
 
@@ -532,6 +628,342 @@ function renderForm(
         <AzureBlobForm
           config={config as AzureBlobConfig}
           onChange={onChange as (p: Partial<AzureBlobConfig>) => void}
+        />
+      );
+    case "azure_service_bus":
+      return (
+        <AzureServiceBusForm
+          config={config as AzureServiceBusConfig}
+          onChange={onChange as (p: Partial<AzureServiceBusConfig>) => void}
+        />
+      );
+    case "azure_cosmos_db":
+      return (
+        <AzureCosmosForm
+          config={config as AzureCosmosConfig}
+          onChange={onChange as (p: Partial<AzureCosmosConfig>) => void}
+        />
+      );
+    case "azure_key_vault":
+      return (
+        <AzureKeyVaultForm
+          config={config as AzureKeyVaultConfig}
+          onChange={onChange as (p: Partial<AzureKeyVaultConfig>) => void}
+        />
+      );
+    case "azure_functions":
+      return (
+        <AzureFunctionsForm
+          config={config as AzureFunctionsConfig}
+          onChange={onChange as (p: Partial<AzureFunctionsConfig>) => void}
+        />
+      );
+    case "gcp_storage":
+      return (
+        <GcpStorageForm
+          config={config as GcpStorageConfig}
+          onChange={onChange as (p: Partial<GcpStorageConfig>) => void}
+        />
+      );
+    case "gcp_pubsub":
+      return (
+        <GcpPubSubForm
+          config={config as GcpPubSubConfig}
+          onChange={onChange as (p: Partial<GcpPubSubConfig>) => void}
+        />
+      );
+    case "gcp_bigquery":
+      return (
+        <GcpBigQueryForm
+          config={config as GcpBigQueryConfig}
+          onChange={onChange as (p: Partial<GcpBigQueryConfig>) => void}
+        />
+      );
+    case "oracle_db":
+      return (
+        <OracleDbForm
+          config={config as OracleDbConfig}
+          onChange={onChange as (p: Partial<OracleDbConfig>) => void}
+        />
+      );
+    case "oci_object_storage":
+      return (
+        <OciObjectStorageForm
+          config={config as OciObjectStorageConfig}
+          onChange={onChange as (p: Partial<OciObjectStorageConfig>) => void}
+        />
+      );
+    case "stripe":
+      return (
+        <StripeForm
+          config={config as StripeConfig}
+          onChange={onChange as (p: Partial<StripeConfig>) => void}
+        />
+      );
+    case "github":
+      return (
+        <GithubForm
+          config={config as GithubConfig}
+          onChange={onChange as (p: Partial<GithubConfig>) => void}
+        />
+      );
+    case "discord":
+      return (
+        <DiscordForm
+          config={config as DiscordConfig}
+          onChange={onChange as (p: Partial<DiscordConfig>) => void}
+        />
+      );
+    case "notion":
+      return (
+        <NotionForm
+          config={config as NotionConfig}
+          onChange={onChange as (p: Partial<NotionConfig>) => void}
+        />
+      );
+    case "salesforce":
+      return (
+        <SalesforceForm
+          config={config as SalesforceConfig}
+          onChange={onChange as (p: Partial<SalesforceConfig>) => void}
+        />
+      );
+    case "jira":
+      return (
+        <JiraForm
+          config={config as JiraConfig}
+          onChange={onChange as (p: Partial<JiraConfig>) => void}
+        />
+      );
+    case "ms_teams":
+      return (
+        <MsTeamsForm
+          config={config as MsTeamsConfig}
+          onChange={onChange as (p: Partial<MsTeamsConfig>) => void}
+        />
+      );
+    case "hubspot":
+      return (
+        <HubspotForm
+          config={config as HubspotConfig}
+          onChange={onChange as (p: Partial<HubspotConfig>) => void}
+        />
+      );
+    case "airtable":
+      return (
+        <AirtableForm
+          config={config as AirtableConfig}
+          onChange={onChange as (p: Partial<AirtableConfig>) => void}
+        />
+      );
+    case "pagerduty":
+      return (
+        <PagerDutyForm
+          config={config as PagerDutyConfig}
+          onChange={onChange as (p: Partial<PagerDutyConfig>) => void}
+        />
+      );
+    case "gitlab":
+      return (
+        <GitlabForm
+          config={config as GitlabConfig}
+          onChange={onChange as (p: Partial<GitlabConfig>) => void}
+        />
+      );
+    case "linear":
+      return (
+        <LinearForm
+          config={config as LinearConfig}
+          onChange={onChange as (p: Partial<LinearConfig>) => void}
+        />
+      );
+    case "telegram":
+      return (
+        <TelegramForm
+          config={config as TelegramConfig}
+          onChange={onChange as (p: Partial<TelegramConfig>) => void}
+        />
+      );
+    case "sendgrid":
+      return (
+        <SendgridForm
+          config={config as SendgridConfig}
+          onChange={onChange as (p: Partial<SendgridConfig>) => void}
+        />
+      );
+    case "sentry":
+      return (
+        <SentryForm
+          config={config as SentryConfig}
+          onChange={onChange as (p: Partial<SentryConfig>) => void}
+        />
+      );
+    case "shopify":
+      return (
+        <ShopifyForm
+          config={config as ShopifyConfig}
+          onChange={onChange as (p: Partial<ShopifyConfig>) => void}
+        />
+      );
+    case "mailchimp":
+      return (
+        <MailchimpForm
+          config={config as MailchimpConfig}
+          onChange={onChange as (p: Partial<MailchimpConfig>) => void}
+        />
+      );
+    case "google_drive":
+      return (
+        <GoogleDriveForm
+          config={config as GoogleDriveConfig}
+          onChange={onChange as (p: Partial<GoogleDriveConfig>) => void}
+        />
+      );
+    case "dropbox":
+      return (
+        <DropboxForm
+          config={config as DropboxConfig}
+          onChange={onChange as (p: Partial<DropboxConfig>) => void}
+        />
+      );
+    case "datadog":
+      return (
+        <DatadogForm
+          config={config as DatadogConfig}
+          onChange={onChange as (p: Partial<DatadogConfig>) => void}
+        />
+      );
+    case "paypal":
+      return (
+        <PaypalForm
+          config={config as PaypalConfig}
+          onChange={onChange as (p: Partial<PaypalConfig>) => void}
+        />
+      );
+    case "square":
+      return (
+        <SquareForm
+          config={config as SquareConfig}
+          onChange={onChange as (p: Partial<SquareConfig>) => void}
+        />
+      );
+    case "resend":
+      return (
+        <ResendForm
+          config={config as ResendConfig}
+          onChange={onChange as (p: Partial<ResendConfig>) => void}
+        />
+      );
+    case "onedrive":
+      return (
+        <OneDriveForm
+          config={config as OneDriveConfig}
+          onChange={onChange as (p: Partial<OneDriveConfig>) => void}
+        />
+      );
+    case "box":
+      return (
+        <BoxForm
+          config={config as BoxConfig}
+          onChange={onChange as (p: Partial<BoxConfig>) => void}
+        />
+      );
+    case "circleci":
+      return (
+        <CircleCIForm
+          config={config as CircleCIConfig}
+          onChange={onChange as (p: Partial<CircleCIConfig>) => void}
+        />
+      );
+    case "whatsapp_business":
+      return (
+        <WhatsappForm
+          config={config as WhatsappConfig}
+          onChange={onChange as (p: Partial<WhatsappConfig>) => void}
+        />
+      );
+    case "pipedrive":
+      return (
+        <PipedriveForm
+          config={config as PipedriveConfig}
+          onChange={onChange as (p: Partial<PipedriveConfig>) => void}
+        />
+      );
+    case "customer_io":
+      return (
+        <CustomerIoForm
+          config={config as CustomerIoConfig}
+          onChange={onChange as (p: Partial<CustomerIoConfig>) => void}
+        />
+      );
+    case "kafka":
+      return (
+        <KafkaForm
+          config={config as KafkaConfig}
+          onChange={onChange as (p: Partial<KafkaConfig>) => void}
+        />
+      );
+    case "nats":
+      return (
+        <NatsForm
+          config={config as NatsConfig}
+          onChange={onChange as (p: Partial<NatsConfig>) => void}
+        />
+      );
+    case "snowflake":
+      return (
+        <SnowflakeForm
+          config={config as SnowflakeConfig}
+          onChange={onChange as (p: Partial<SnowflakeConfig>) => void}
+        />
+      );
+    case "clickhouse":
+      return (
+        <ClickhouseForm
+          config={config as ClickhouseConfig}
+          onChange={onChange as (p: Partial<ClickhouseConfig>) => void}
+        />
+      );
+    case "elasticsearch":
+      return (
+        <ElasticsearchForm
+          config={config as ElasticsearchConfig}
+          onChange={onChange as (p: Partial<ElasticsearchConfig>) => void}
+        />
+      );
+    case "ai_image":
+      return (
+        <AiImageForm
+          config={config as AiImageConfig}
+          onChange={onChange as (p: Partial<AiImageConfig>) => void}
+        />
+      );
+    case "ai_transcribe":
+      return (
+        <AiTranscribeForm
+          config={config as AiTranscribeConfig}
+          onChange={onChange as (p: Partial<AiTranscribeConfig>) => void}
+        />
+      );
+    case "ai_tts":
+      return (
+        <AiTtsForm
+          config={config as AiTtsConfig}
+          onChange={onChange as (p: Partial<AiTtsConfig>) => void}
+        />
+      );
+    case "ai_embed":
+      return (
+        <AiEmbedForm
+          config={config as AiEmbedConfig}
+          onChange={onChange as (p: Partial<AiEmbedConfig>) => void}
+        />
+      );
+    case "vector_db":
+      return (
+        <VectorDbForm
+          config={config as VectorDbConfig}
+          onChange={onChange as (p: Partial<VectorDbConfig>) => void}
         />
       );
     default:

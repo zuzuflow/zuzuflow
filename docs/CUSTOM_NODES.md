@@ -1,10 +1,28 @@
 # Building Custom Nodes
 
+> Looking for canvas UX (multi-select, grouping, Immediate trigger)? See
+> [**CANVAS.md**](./CANVAS.md).
+
 ZuzuFlow has two paths for authoring custom nodes:
 
 1. **In-app Custom Node Builder** (recommended for most cases) — open the builder modal from the palette's "Custom Nodes" section. Users fill in name, icon, input fields, output handles, and either paste sandboxed TypeScript or configure an HTTP call. The node appears in the palette and drops into any workflow. No code deploy required.
 
 2. **Built-in node kind** (advanced) — register a first-class `NodeKind` with a dedicated activity, React component, and form. Pick this when your integration needs special dependencies, a custom UI, or performance that the sandbox can't match. The guide below covers this path.
+
+> **Heads up:** ZuzuFlow already ships **110+ first-class built-in nodes** out of
+> the box, organised into clean categories — Triggers, Logical, Utilities, Code,
+> AI Agents, Communication, Data & Storage, AWS / Azure / GCP / Oracle Cloud,
+> Integrations (29 SaaS natives — Stripe, GitHub, Salesforce, HubSpot, Notion,
+> Discord, MS Teams, Telegram, WhatsApp, Jira, Linear, Shopify, PayPal, Square,
+> Mailchimp, SendGrid, Resend, PagerDuty, Datadog, Sentry, Dropbox, OneDrive,
+> Box, Google Drive, Airtable, Pipedrive, CircleCI, GitLab, Customer.io), plus
+> Phase 3 streaming/analytics (Kafka, NATS, Snowflake, ClickHouse, Elasticsearch)
+> and Phase 4 AI ecosystem (DALL·E + Stable Diffusion, Whisper + AssemblyAI,
+> OpenAI TTS + ElevenLabs, embeddings via OpenAI/Cohere/Hugging Face, Pinecone +
+> Weaviate + Qdrant). Browse the palette before reaching for the Custom Node
+> Builder — there's a good chance the integration you want is already a
+> first-class node with a purpose-built form. The Custom Node Builder is for
+> the long tail (internal APIs, edge providers) that doesn't justify a built-in.
 
 ---
 
