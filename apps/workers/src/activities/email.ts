@@ -12,11 +12,29 @@ export interface EmailActivityInput {
   config: SendEmailConfig;
   /** nodeOutputs context for interpolation */
   context: Record<string, unknown>;
-  /** Resolved credential values (decrypted by the caller before passing) */
+  /**
+   * Resolved credential values (decrypted by the caller before passing).
+   *
+   * Accepts BOTH the form's field keys (host/port/user/pass/from/secure) —
+   * which is what the Credentials page UI writes — AND the legacy `smtp*`
+   * prefixed keys, so existing deployments that stored data with either
+   * convention keep working. The form keys take precedence when both are
+   * present. Values come through as strings (from the encrypted JSON blob);
+   * we coerce to number/boolean where needed.
+   */
   credentials?: {
+    // Preferred — matches the Credentials page form fields
+    host?: string;
+    port?: string | number;
+    secure?: string | boolean;
+    user?: string;
+    pass?: string;
+    from?: string;
+    apiKey?: string; // SendGrid credential kind stores the API key here
+    // Legacy / backward-compat
     smtpHost?: string;
-    smtpPort?: number;
-    smtpSecure?: boolean;
+    smtpPort?: string | number;
+    smtpSecure?: string | boolean;
     smtpUser?: string;
     smtpPass?: string;
     smtpFrom?: string;
@@ -61,14 +79,23 @@ export async function sendEmailActivity(
 
   if (cfg.provider === "sendgrid") {
     const apiKey =
-      credentials.sendgridApiKey ?? process.env.SENDGRID_API_KEY;
+      credentials.apiKey ??
+      credentials.sendgridApiKey ??
+      process.env.SENDGRID_API_KEY;
     if (!apiKey) {
       throw ApplicationFailure.create({
-        message: "SendGrid API key not configured",
+        message:
+          "SendGrid API key not configured — add a SendGrid credential in the Credentials page or set SENDGRID_API_KEY on the worker.",
         type: "EMAIL_CONFIGURATION_ERROR",
         nonRetryable: true,
       });
     }
+
+    const fromAddr =
+      credentials.from ??
+      credentials.smtpFrom ??
+      process.env.SMTP_FROM ??
+      "no-reply@workflow.local";
 
     try {
       await axios.post(
@@ -82,7 +109,7 @@ export async function sendEmailActivity(
               subject,
             },
           ],
-          from: { email: credentials.smtpFrom ?? process.env.SMTP_FROM ?? "no-reply@workflow.local" },
+          from: { email: fromAddr },
           content: htmlBody
             ? [
                 { type: "text/html", value: htmlBody },
@@ -110,31 +137,50 @@ export async function sendEmailActivity(
   }
 
   // SMTP via nodemailer
-  const smtpHost = credentials.smtpHost ?? process.env.SMTP_HOST;
+  //
+  // Resolution order (per field): form-key → legacy smtp* key → env var.
+  // Port + secure are coerced from string (encrypted blobs are JSON string
+  // maps) to number / boolean.
+  const smtpHost = credentials.host ?? credentials.smtpHost ?? process.env.SMTP_HOST;
   if (!smtpHost) {
     throw ApplicationFailure.create({
-      message: "SMTP host not configured",
+      message:
+        "SMTP host not configured — add an SMTP credential in the Credentials page, or set SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS/SMTP_FROM env vars on the worker.",
       type: "EMAIL_CONFIGURATION_ERROR",
       nonRetryable: true,
     });
   }
 
+  const rawPort = credentials.port ?? credentials.smtpPort ?? process.env.SMTP_PORT;
+  const smtpPort =
+    typeof rawPort === "number"
+      ? rawPort
+      : rawPort
+        ? parseInt(String(rawPort), 10) || 587
+        : 587;
+
+  const rawSecure =
+    credentials.secure ?? credentials.smtpSecure ?? process.env.SMTP_SECURE;
+  const smtpSecure =
+    typeof rawSecure === "boolean"
+      ? rawSecure
+      : String(rawSecure ?? "").toLowerCase() === "true";
+
+  const smtpUser = credentials.user ?? credentials.smtpUser ?? process.env.SMTP_USER;
+  const smtpPass = credentials.pass ?? credentials.smtpPass ?? process.env.SMTP_PASS;
+  const smtpFrom =
+    credentials.from ?? credentials.smtpFrom ?? process.env.SMTP_FROM ?? "no-reply@workflow.local";
+
   const transporter = nodemailer.createTransport({
     host: smtpHost,
-    port: credentials.smtpPort ?? parseInt(process.env.SMTP_PORT ?? "587", 10),
-    secure: credentials.smtpSecure ?? process.env.SMTP_SECURE === "true",
-    auth:
-      credentials.smtpUser || process.env.SMTP_USER
-        ? {
-            user: credentials.smtpUser ?? process.env.SMTP_USER,
-            pass: credentials.smtpPass ?? process.env.SMTP_PASS,
-          }
-        : undefined,
+    port: smtpPort,
+    secure: smtpSecure,
+    auth: smtpUser ? { user: smtpUser, pass: smtpPass } : undefined,
   });
 
   try {
     const info = await transporter.sendMail({
-      from: credentials.smtpFrom ?? process.env.SMTP_FROM ?? "no-reply@workflow.local",
+      from: smtpFrom,
       to: toAddresses.join(", "),
       cc: cc?.join(", "),
       bcc: bcc?.join(", "),

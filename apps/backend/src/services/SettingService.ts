@@ -8,7 +8,9 @@ import { prisma } from "../db/client";
 // =============================================================================
 
 const ALGORITHM = "aes-256-gcm" as const;
-const SENSITIVE_KEYS = new Set(["git"]); // keys whose values contain secrets
+// Keys whose values contain secrets — stored AES-256-GCM encrypted.
+// Keep in sync with apps/zuzuflow-admin SettingService.
+const SENSITIVE_KEYS = new Set(["git", "platform.smtp"]);
 
 function getKey(): Buffer {
   const raw = process.env.ENCRYPTION_KEY ?? "dev-encryption-key-32-chars-long!";
