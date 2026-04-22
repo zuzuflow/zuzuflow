@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "ts-node --transpile-only src/worker.ts",
-    "build": "tsc --project tsconfig.json",
+    "build": "NODE_OPTIONS=--max-old-space-size=4096 tsc --project tsconfig.json",
     "start": "node dist/worker.js",
-    "lint": "tsc --noEmit",
+    "lint": "NODE_OPTIONS=--max-old-space-size=4096 tsc --noEmit",
     "clean": "rm -rf dist"
   },
   "dependencies": {

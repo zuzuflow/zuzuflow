@@ -83,7 +83,19 @@ RUN cd packages/shared && node -e "\
   require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');"
 
 # Build workers
-RUN pnpm --filter workers build
+#
+# The 4 GB heap budget here is deliberate: the workers package now bundles
+# ~20 lazy SDK imports (Azure / GCP / Oracle / Snowflake / ClickHouse /
+# Elasticsearch / Kafka / NATS / jsforce / Stripe / Notion / Octokit / etc.).
+# tsc's type-checker eats >2 GB resolving the union of all those .d.ts files;
+# the default Node heap (~1.5 GB inside small build runners) crashes mid-pass
+# with SIGABRT. The package.json script also sets this — Dockerfile sets it
+# again as defense-in-depth in case CI overrides the script invocation.
+#
+# Scoped to this single RUN (NOT an ENV) so the runtime worker process keeps
+# the orchestrator's memory limit as its de-facto cap — avoids surprise
+# OOM-kills if the pod has less than 4 GB available.
+RUN NODE_OPTIONS=--max-old-space-size=4096 pnpm --filter workers build
 
 ENV NODE_ENV=production
 
