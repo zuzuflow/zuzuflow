@@ -1,9 +1,7 @@
 import React, { useEffect } from "react";
 
-// We import from the shared store that the main app uses.
-// When bundled in library mode this becomes part of the package.
 import { useApiConfigStore } from "../../../apps/frontend/src/store/apiConfigStore";
-import { API_BASE_URL } from "../../../apps/frontend/src/lib/api";
+import { useEnvironmentStore } from "../../../apps/frontend/src/store/environmentStore";
 
 export interface ApiProviderProps {
   /**
@@ -18,35 +16,66 @@ export interface ApiProviderProps {
    * If omitted, uses the build-time VITE_API_URL or defaults to "/api".
    */
   apiUrl?: string;
+  /**
+   * Environment slug to scope all API calls to (workflows, credentials,
+   * variables, executions, logs). Required for the WorkflowDesigner +
+   * WorkflowLogs screens — they refuse to load data without one.
+   *
+   * Pass the slug your backend assigned the environment, e.g. "production"
+   * or "staging-acme". The host app is responsible for picking which
+   * environment the embedded screen should target.
+   */
+  envSlug?: string;
   children: React.ReactNode;
 }
 
 /**
- * ApiProvider wires the token and optional API URL into the in-memory store
- * so all API calls made by child components are automatically authenticated.
+ * ApiProvider wires the bearer token + (optional) API URL + (optional)
+ * environment slug into the SDK's in-memory stores so all API calls made by
+ * embedded components are automatically authenticated and scoped.
  *
  * Usage:
- *   <ApiProvider token={jwt} apiUrl="https://app.zuzuflow.com/api">
- *     <WorkflowApp />
+ *   <ApiProvider
+ *     token={jwt}
+ *     apiUrl="https://app.zuzuflow.com/api"
+ *     envSlug="production"
+ *   >
+ *     <WorkflowDesigner workflowId="abc" />
  *   </ApiProvider>
  */
-export function ApiProvider({ token, apiUrl, children }: ApiProviderProps): React.ReactElement {
-  const setToken = useApiConfigStore((s: { setToken: (token: string) => void }) => s.setToken);
+export function ApiProvider({
+  token,
+  apiUrl,
+  envSlug,
+  children,
+}: ApiProviderProps): React.ReactElement {
+  const setToken = useApiConfigStore(
+    (s: { setToken: (token: string) => void }) => s.setToken,
+  );
+  const setCurrentSlug = useEnvironmentStore((s) => s.setCurrentSlug);
 
   useEffect(() => {
     setToken(token);
   }, [token, setToken]);
 
   // If apiUrl is provided, override the global API_BASE_URL at module level.
-  // This is a simple approach that works for single-instance usage.
+  // Single-instance assumption — fine for embedded usage.
   useEffect(() => {
     if (apiUrl) {
-      (globalThis as any).__ZUZUFLOW_API_URL__ = apiUrl;
+      (globalThis as unknown as { __ZUZUFLOW_API_URL__?: string }).__ZUZUFLOW_API_URL__ =
+        apiUrl;
     }
     return () => {
-      delete (globalThis as any).__ZUZUFLOW_API_URL__;
+      delete (globalThis as unknown as { __ZUZUFLOW_API_URL__?: string }).__ZUZUFLOW_API_URL__;
     };
   }, [apiUrl]);
+
+  // Plumb the environment slug into the env store so api.ts attaches it as
+  // a header on every request. The host app picks which env the embedded
+  // screen targets — no env-picker UI ships in the SDK.
+  useEffect(() => {
+    if (envSlug) setCurrentSlug(envSlug);
+  }, [envSlug, setCurrentSlug]);
 
   return <>{children}</>;
 }

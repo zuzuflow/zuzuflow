@@ -1,7 +1,7 @@
 {
   "name": "@zuzuflow/react-sdk",
-  "version": "0.1.0",
-  "description": "Embeddable React UI components for ZuzuFlow — workflow editor, runtime app shell, and API provider",
+  "version": "0.2.0",
+  "description": "Embeddable React screen components for ZuzuFlow — Workflow Designer + Workflow Logs (no routing, no app shell)",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,7 +12,11 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "license": "MIT",
   "publishConfig": {
     "access": "public"

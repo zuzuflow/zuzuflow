@@ -14,7 +14,10 @@
     "clean": "turbo run clean",
     "db:migrate": "pnpm --filter backend prisma migrate dev",
     "db:generate": "pnpm --filter backend prisma generate",
-    "db:studio": "pnpm --filter backend prisma studio"
+    "db:studio": "pnpm --filter backend prisma studio",
+    "release": "node scripts/release.mjs",
+    "release:react-sdk": "node scripts/release.mjs react-sdk",
+    "release:nodejs-sdk": "node scripts/release.mjs nodejs-sdk"
   },
   "devDependencies": {
     "turbo": "^1.13.0",
