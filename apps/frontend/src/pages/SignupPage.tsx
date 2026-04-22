@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
-import { Eye, EyeOff, Loader2, UserPlus, Lock } from "lucide-react";
+import { Eye, EyeOff, Loader2, UserPlus, Lock, MailCheck } from "lucide-react";
 import { useSignupStatus } from "@/hooks/useSignupStatus";
+import { resendVerificationEmail } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { Logo } from "@/components/branding/Logo";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,10 @@ export function SignupPage(): React.ReactElement {
   const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // Post-signup "check your email" state (public signup, no invite token)
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resentAt, setResentAt] = useState<number | null>(null);
 
   // When an invite is in play the user doesn't need to name a new org — they
   // join the inviting one. Seed a throwaway org name; backend will still create
@@ -53,20 +58,100 @@ export function SignupPage(): React.ReactElement {
 
     setLoading(true);
     try {
-      await signup(
+      const result = await signup(
         orgName.trim(),
         username.trim(),
         email.trim(),
         password.trim(),
         inviteToken,
       );
-      navigate("/", { replace: true });
+      if ("requiresVerification" in result) {
+        // Public signup — no JWT. Show "check your email" screen.
+        setPendingEmail(result.email);
+      } else {
+        // Invite path (or first-user bootstrap) — logged in already.
+        navigate("/", { replace: true });
+      }
     } catch (err) {
       setError((err as Error).message || "Signup failed");
     } finally {
       setLoading(false);
     }
   };
+
+  const handleResend = async () => {
+    if (!pendingEmail) return;
+    setResending(true);
+    try {
+      await resendVerificationEmail(pendingEmail);
+      setResentAt(Date.now());
+    } finally {
+      setResending(false);
+    }
+  };
+
+  // "Check your email" screen shown after a public signup. No JWT issued —
+  // user must click the verification link to activate their account.
+  if (pendingEmail) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={spring.gentle}
+          className="max-w-md w-full rounded-2xl border border-border bg-card p-8 text-center shadow-xl"
+        >
+          <div className="flex justify-center mb-5">
+            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+              <MailCheck size={26} className="text-primary" />
+            </div>
+          </div>
+          <h1 className="text-xl font-semibold text-foreground mb-2">
+            Check your email
+          </h1>
+          <p className="text-sm text-muted-foreground mb-1">
+            We've sent a verification link to
+          </p>
+          <p className="text-sm font-medium text-foreground mb-5 break-all">
+            {pendingEmail}
+          </p>
+          <p className="text-xs text-muted-foreground mb-6 leading-relaxed">
+            Click the link in the email to activate your account and sign in.
+            The link expires in 24 hours.
+          </p>
+
+          <div className="space-y-2">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleResend}
+              disabled={resending}
+            >
+              {resending ? (
+                <><Loader2 size={14} className="animate-spin mr-2" /> Resending...</>
+              ) : resentAt ? (
+                "Verification email resent ✓"
+              ) : (
+                "Resend verification email"
+              )}
+            </Button>
+            <Link
+              to="/login"
+              className="inline-block w-full text-sm text-muted-foreground hover:text-foreground transition-colors pt-2"
+            >
+              Back to sign in
+            </Link>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground mt-6 leading-relaxed">
+            Didn't get it? Check your spam folder, or wait a minute and try
+            resending. If your admin hasn't configured SMTP yet, the link will
+            be printed to the server logs instead.
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
 
   // Public signup may be disabled on self-hosted instances. An invite token
   // bypasses this — invited users can still create their account through the

@@ -147,6 +147,21 @@ export interface MfaChallengeResult {
   mfaMethods: { totp: boolean; email: boolean };
 }
 
+export interface SignupVerificationPendingResult {
+  requiresVerification: true;
+  email: string;
+  message?: string;
+}
+
+export class EmailUnverifiedError extends Error {
+  code = "EMAIL_UNVERIFIED" as const;
+  email: string;
+  constructor(email: string, message: string) {
+    super(message);
+    this.email = email;
+  }
+}
+
 export interface MfaStatus {
   totpEnabled: boolean;
   emailEnabled: boolean;
@@ -174,7 +189,14 @@ export async function login(
     body: JSON.stringify({ usernameOrEmail, password }),
   });
   if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      code?: string;
+      email?: string;
+    };
+    if (data.code === "EMAIL_UNVERIFIED" && data.email) {
+      throw new EmailUnverifiedError(data.email, data.error || "Email not verified");
+    }
     throw new Error(data.error || "Invalid credentials");
   }
   const result = (await res.json()) as
@@ -198,9 +220,9 @@ export async function signup(
   email: string,
   password: string,
   /** Optional: raw invite token from an email link. If present, the new user
-   *  is auto-added to the inviting org. */
+   *  is auto-added to the inviting org and logged in immediately. */
   inviteToken?: string,
-): Promise<LoginResult> {
+): Promise<LoginResult | SignupVerificationPendingResult> {
   const res = await fetch(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -210,9 +232,39 @@ export async function signup(
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error || "Signup failed");
   }
+  const result = (await res.json()) as LoginResult | SignupVerificationPendingResult;
+  if ("requiresVerification" in result) {
+    return result;   // no JWT — caller shows "check your email" screen
+  }
+  getApiConfig().setToken(result.token);
+  return result;
+}
+
+/** Verify an email using the token from the verification link. Logs the user in. */
+export async function verifyEmail(token: string): Promise<LoginResult> {
+  const res = await fetch(`${API_BASE_URL}/auth/verify-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+    const err = new Error(data.error || "Verification failed");
+    (err as any).code = data.code;
+    throw err;
+  }
   const result = (await res.json()) as LoginResult;
   getApiConfig().setToken(result.token);
   return result;
+}
+
+/** Resend verification email. Always succeeds (no account-enumeration). */
+export async function resendVerificationEmail(email: string): Promise<void> {
+  await fetch(`${API_BASE_URL}/auth/resend-verification`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
 }
 
 /**

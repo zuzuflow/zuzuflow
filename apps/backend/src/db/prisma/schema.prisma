@@ -310,15 +310,16 @@ model Setting {
 // -----------------------------------------------------------------------------
 
 model User {
-  id           String    @id @default(uuid())
-  username     String    @unique
-  email        String    @unique            // required — unique across all users
-  passwordHash String
-  role         String    @default("editor") // "superadmin" | "admin" | "editor" | "disabled" — global role
-  lastLoginAt  DateTime?                    // last successful login timestamp
-  lastLoginIp  String?                      // IP address of last login
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id              String    @id @default(uuid())
+  username        String    @unique
+  email           String    @unique            // required — unique across all users
+  passwordHash    String
+  role            String    @default("editor") // "superadmin" | "admin" | "editor" | "disabled" — global role
+  emailVerifiedAt DateTime?                    // null until user clicks verification link
+  lastLoginAt     DateTime?                    // last successful login timestamp
+  lastLoginIp     String?                      // IP address of last login
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   // MFA fields
   mfaTotpEnabled    Boolean  @default(false)
@@ -326,13 +327,35 @@ model User {
   mfaEmailEnabled   Boolean  @default(false)
   mfaBackupCodes    String[] @default([])   // hashed backup codes
 
-  apiTokens      ApiToken[]
-  environments   UserEnvironment[]
-  orgMembers     OrgMember[]
-  mfaChallenges  MfaChallenge[]
-  orgInvitesSent OrgInvite[]       @relation("OrgInvitesSent")
+  apiTokens            ApiToken[]
+  environments         UserEnvironment[]
+  orgMembers           OrgMember[]
+  mfaChallenges        MfaChallenge[]
+  orgInvitesSent       OrgInvite[]             @relation("OrgInvitesSent")
+  emailVerifications   EmailVerificationToken[]
 
   @@map("users")
+}
+
+// -----------------------------------------------------------------------------
+// EmailVerificationToken — one-shot token emailed to users after signup.
+// The row's tokenHash = sha256(plaintext). Plaintext only ever lives in the
+// verification URL; we never store it.
+// -----------------------------------------------------------------------------
+
+model EmailVerificationToken {
+  id         String    @id @default(uuid())
+  userId     String
+  tokenHash  String    @unique            // sha256 hex
+  email      String                        // snapshot at issue time — guards against later email changes
+  expiresAt  DateTime
+  usedAt     DateTime?                     // null until the user clicks the link
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
 }
 
 // -----------------------------------------------------------------------------

@@ -24,6 +24,8 @@ import {
   resendMfaEmailOtp,
   recoverMfaStart,
   recoverMfaConfirm,
+  resendVerificationEmail,
+  EmailUnverifiedError,
   type LoginResult,
   type MfaChallengeResult,
   type MfaEnrollmentRequiredResult,
@@ -637,6 +639,23 @@ export function LoginPage(): React.ReactElement {
   );
   const [showMfaRecovery, setShowMfaRecovery] = useState(false);
 
+  // "Email not verified" surface: shown when the backend rejects login with
+  // EMAIL_UNVERIFIED. Offers a one-click resend.
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  const [resendingVerification, setResendingVerification] = useState(false);
+  const [verificationResentAt, setVerificationResentAt] = useState<number | null>(null);
+
+  const handleResendVerification = async () => {
+    if (!unverifiedEmail) return;
+    setResendingVerification(true);
+    try {
+      await resendVerificationEmail(unverifiedEmail);
+      setVerificationResentAt(Date.now());
+    } finally {
+      setResendingVerification(false);
+    }
+  };
+
   const startEnrollment = (result: MfaEnrollmentRequiredResult) => {
     useOrgStore.getState().setOrganizations([
       {
@@ -662,6 +681,8 @@ export function LoginPage(): React.ReactElement {
       return;
     }
     setLoading(true);
+    setUnverifiedEmail(null);
+    setVerificationResentAt(null);
     try {
       const result = await login(usernameOrEmail.trim(), password.trim());
       if ("mfaRequired" in result) {
@@ -674,7 +695,12 @@ export function LoginPage(): React.ReactElement {
       }
       finalizeLogin(result, navigate, inviteToken);
     } catch (err) {
-      setError((err as Error).message || "Login failed");
+      if (err instanceof EmailUnverifiedError) {
+        setUnverifiedEmail(err.email);
+        setError("");
+      } else {
+        setError((err as Error).message || "Login failed");
+      }
     } finally {
       setLoading(false);
     }
@@ -842,6 +868,41 @@ export function LoginPage(): React.ReactElement {
                         >
                           {error}
                         </motion.p>
+                      )}
+                      {unverifiedEmail && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="text-sm bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-3 space-y-2"
+                        >
+                          <div className="flex items-start gap-2">
+                            <Mail size={14} className="text-amber-500 mt-0.5 shrink-0" />
+                            <div className="text-amber-200/90">
+                              <p className="font-medium text-foreground">Please verify your email</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                We sent a verification link to <span className="text-foreground font-medium break-all">{unverifiedEmail}</span>.
+                                Click the link to activate your account.
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full"
+                            disabled={resendingVerification}
+                            onClick={handleResendVerification}
+                          >
+                            {resendingVerification ? (
+                              <><Loader2 size={12} className="animate-spin mr-2" /> Resending…</>
+                            ) : verificationResentAt ? (
+                              <><CheckCircle2 size={12} className="mr-2" /> Verification email resent</>
+                            ) : (
+                              "Resend verification email"
+                            )}
+                          </Button>
+                        </motion.div>
                       )}
                     </AnimatePresence>
                   </form>

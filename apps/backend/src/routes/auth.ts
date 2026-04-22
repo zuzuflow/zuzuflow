@@ -9,6 +9,7 @@ import { organizationService } from "../services/OrganizationService";
 import { mfaService } from "../services/MfaService";
 import { inviteService } from "../services/InviteService";
 import { emailService } from "../services/EmailService";
+import { emailVerificationService } from "../services/EmailVerificationService";
 import { orgSettingsService } from "../services/OrgSettingsService";
 import { requireAuth } from "../middleware/auth";
 import { prisma } from "../db/client";
@@ -51,6 +52,22 @@ authRouter.post("/login", async (req: Request, res: Response) => {
   if (!user) {
     logger.warn("Failed login attempt", { login, ip: req.ip });
     return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  // Block unverified users. They must click the verification link in their
+  // signup email before we let them in. The frontend shows a "Resend
+  // verification email" CTA when it sees this code.
+  const fullUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { emailVerifiedAt: true },
+  });
+  if (!fullUser?.emailVerifiedAt) {
+    logger.warn("Login blocked: email not verified", { userId: user.id, ip: req.ip });
+    return res.status(403).json({
+      error: "Please verify your email address before signing in.",
+      code: "EMAIL_UNVERIFIED",
+      email: user.email,
+    });
   }
 
   // Look up user's organizations
@@ -243,10 +260,21 @@ authRouter.get(
   },
 );
 
-// POST /api/auth/signup  { username, email, password } → { token, user, organization }
+// POST /api/auth/signup
+//   { orgName, username, email, password, inviteToken? }
+//
+// Two response shapes:
+//   (a) No invite token → 201 { requiresVerification: true, email }
+//       User is created but UNVERIFIED. They receive a verification email;
+//       they cannot log in until they click the link.
+//   (b) Invite token present → 201 { token, user, organization }
+//       The fact that they clicked a link in their own inbox proves email
+//       ownership, so we skip the extra verification round-trip, mark the
+//       email verified immediately, and log them in.
 // ---------------------------------------------------------------------------
 authRouter.post("/signup", async (req: Request, res: Response) => {
-  const { username, email, password, inviteToken } = req.body as {
+  const { orgName, username, email, password, inviteToken } = req.body as {
+    orgName?: string;
     username?: string;
     email?: string;
     password?: string;
@@ -281,13 +309,13 @@ authRouter.post("/signup", async (req: Request, res: Response) => {
       username,
       email,
       password,
+      orgName,
     );
 
-    // If signup was triggered from an invite email, auto-accept it so the user
-    // lands directly inside the inviting org (and isn't stuck with only the
-    // personal org their signup created).
-    let activeOrgId = organizationId;
+    // Invite path: prove-by-clicking-the-email is already implicit, so we
+    // auto-accept the invite, mark the user verified, and log them in.
     if (inviteToken) {
+      let activeOrgId = organizationId;
       try {
         const result = await inviteService.acceptInvite(inviteToken, user.id);
         activeOrgId = result.organizationId;
@@ -302,38 +330,182 @@ authRouter.post("/signup", async (req: Request, res: Response) => {
           err: (err as Error).message,
         });
       }
+
+      // Mark email verified (clicking a link in your own inbox = proof of ownership).
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerifiedAt: new Date() },
+      });
+
+      const org = await organizationService.listUserOrganizations(user.id);
+      const organization = org.find((o) => o.id === activeOrgId) ?? org[0];
+
+      // First user is always superadmin (see UserService.signup); otherwise
+      // they're the owner of the org they just created or joined.
+      const effectiveRole =
+        user.role === "superadmin" || user.role === "admin" ? user.role : "owner";
+      const token = jwt.sign(
+        {
+          sub: user.id,
+          username: user.username,
+          role: effectiveRole,
+          orgId: activeOrgId,
+        },
+        config.JWT_SECRET,
+        { expiresIn: JWT_EXPIRY },
+      );
+
+      logger.info("Signup successful (invite path)", {
+        userId: user.id,
+        username: user.username,
+        orgId: activeOrgId,
+      });
+      return res
+        .status(201)
+        .json({ token, expiresIn: JWT_EXPIRY, user, organization });
     }
 
-    const org = await organizationService.listUserOrganizations(user.id);
-    const organization = org.find((o) => o.id === activeOrgId) ?? org[0];
+    // Public signup path: issue a verification token and email it. No JWT —
+    // the user cannot sign in until they click the link.
+    // Grandfather the very first user (superadmin) through verification so
+    // the instance isn't un-bootstrappable when SMTP is offline.
+    if (user.role === "superadmin") {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerifiedAt: new Date() },
+      });
+      const effectiveRole = user.role;
+      const token = jwt.sign(
+        { sub: user.id, username: user.username, role: effectiveRole, orgId: organizationId },
+        config.JWT_SECRET,
+        { expiresIn: JWT_EXPIRY },
+      );
+      const org = await organizationService.listUserOrganizations(user.id);
+      const organization = org.find((o) => o.id === organizationId) ?? org[0];
+      logger.info("First-user signup bypassed verification (superadmin bootstrap)", {
+        userId: user.id,
+      });
+      return res
+        .status(201)
+        .json({ token, expiresIn: JWT_EXPIRY, user, organization });
+    }
 
-    // The very first signup is a superadmin (see UserService.signup). Reflect
-    // that in the JWT; otherwise fall back to "owner" for the new org they just
-    // created.
-    const effectiveRole =
-      user.role === "superadmin" || user.role === "admin" ? user.role : "owner";
-    const token = jwt.sign(
-      {
-        sub: user.id,
+    try {
+      const { verifyUrl } = await emailVerificationService.issueToken(user.id, user.email);
+      await emailService.sendVerificationEmail({
+        to: user.email,
+        verifyUrl,
         username: user.username,
-        role: effectiveRole,
-        orgId: activeOrgId,
-      },
-      config.JWT_SECRET,
-      { expiresIn: JWT_EXPIRY },
-    );
+        expiresInHours: 24,
+      });
+    } catch (err) {
+      // Don't throw — user row is created; they can use resend-verification.
+      logger.error("Failed to send verification email during signup", {
+        userId: user.id,
+        error: (err as Error).message,
+      });
+    }
 
-    logger.info("Signup successful", {
+    logger.info("Signup pending verification", {
       userId: user.id,
       username: user.username,
-      orgId: activeOrgId,
+      email: user.email,
     });
-    return res
-      .status(201)
-      .json({ token, expiresIn: JWT_EXPIRY, user, organization });
+    return res.status(201).json({
+      requiresVerification: true,
+      email: user.email,
+      message: "We've sent a verification link to your email. Click it to activate your account.",
+    });
   } catch (err) {
     return res.status(errStatus(err)).json({ error: (err as Error).message });
   }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/auth/verify-email  { token } → { token, user, organization }
+// ---------------------------------------------------------------------------
+authRouter.post("/verify-email", async (req: Request, res: Response) => {
+  const { token: rawToken } = req.body as { token?: string };
+  if (!rawToken) {
+    return res.status(400).json({ error: "token is required" });
+  }
+  try {
+    const { userId } = await emailVerificationService.consumeToken(rawToken);
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    const orgs = await organizationService.listUserOrganizations(userId);
+    const primary = orgs[0];
+
+    const effectiveRole =
+      user.role === "superadmin" || user.role === "admin" ? user.role : "owner";
+    const jwtPayload: Record<string, unknown> = {
+      sub: user.id,
+      username: user.username,
+      role: effectiveRole,
+    };
+    if (primary) jwtPayload.orgId = primary.id;
+    const jwtToken = jwt.sign(jwtPayload, config.JWT_SECRET, {
+      expiresIn: JWT_EXPIRY,
+    });
+
+    return res.json({
+      token: jwtToken,
+      expiresIn: JWT_EXPIRY,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+      },
+      organization: primary,
+    });
+  } catch (err) {
+    const code = (err as any)?.code;
+    const status =
+      code === "NOT_FOUND" ? 404 :
+      code === "EXPIRED" ? 410 :
+      code === "ALREADY_USED" ? 409 : 500;
+    return res.status(status).json({
+      error: (err as Error).message,
+      code,
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/auth/resend-verification  { email } → 204
+//
+// Always returns 204 regardless of whether the email exists (account-enum
+// resistance). Silently no-ops for already-verified users.
+// ---------------------------------------------------------------------------
+authRouter.post("/resend-verification", async (req: Request, res: Response) => {
+  const { email } = req.body as { email?: string };
+  if (!email || typeof email !== "string") {
+    return res.status(400).json({ error: "email is required" });
+  }
+  try {
+    const normalized = email.trim().toLowerCase();
+    const user = await prisma.user.findUnique({ where: { email: normalized } });
+    if (user && !user.emailVerifiedAt) {
+      const { verifyUrl } = await emailVerificationService.issueToken(user.id, user.email);
+      await emailService.sendVerificationEmail({
+        to: user.email,
+        verifyUrl,
+        username: user.username,
+        expiresInHours: 24,
+      });
+      logger.info("Verification email resent", { userId: user.id });
+    }
+  } catch (err) {
+    logger.error("Resend verification failed", {
+      error: (err as Error).message,
+    });
+    // Still return 204 to avoid leaking whether the account exists.
+  }
+  return res.status(204).end();
 });
 
 // ---------------------------------------------------------------------------

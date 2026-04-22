@@ -95,6 +95,7 @@ export class UserService {
     username: string,
     email: string,
     password: string,
+    orgName?: string,
   ): Promise<{ user: UserPublic; organizationId: string }> {
     if (!username.trim())
       throw Object.assign(new Error("username is required"), {
@@ -153,9 +154,11 @@ export class UserService {
       });
     }
 
-    // Create a personal org for the new user (named after username)
+    // Create the org for the new user — use the name they provided on the
+    // signup form, falling back to a sensible default if none was supplied.
+    const resolvedOrgName = orgName?.trim() || `${username}'s Organization`;
     const org = await organizationService.createOrgWithOwner(
-      `${username}'s Organization`,
+      resolvedOrgName,
       user.id,
     );
 

@@ -17,6 +17,7 @@ import { SignupPage } from "./pages/SignupPage";
 import { OrgPickerPage } from "./pages/OrgPickerPage";
 import { MfaEnrollmentPage } from "./pages/MfaEnrollmentPage";
 import { InviteAcceptPage } from "./pages/InviteAcceptPage";
+import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 
 function AuthGuard({
   children,
@@ -39,6 +40,7 @@ const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { path: "/signup", element: <SignupPage /> },
   { path: "/invite/:token", element: <InviteAcceptPage /> },
+  { path: "/verify-email", element: <VerifyEmailPage /> },
   {
     path: "/mfa-setup",
     element: (
