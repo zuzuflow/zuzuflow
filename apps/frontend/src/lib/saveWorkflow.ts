@@ -1,4 +1,5 @@
 import { useWorkflowStore } from "../store/workflowStore";
+import { getSdkHost } from "../store/sdkHostStore";
 import * as api from "./api";
 
 export type SaveWorkflowResult =
@@ -33,6 +34,21 @@ export async function saveCurrentWorkflow(): Promise<SaveWorkflowResult> {
   const workflowId = state.workflowId;
   const workflowName = state.workflowName;
   const tags = state.tags;
+
+  // Host beforeSave hook — lets an embedding app veto the save (e.g. require a
+  // specific trigger node). Runs after the built-in validation, before persist.
+  const host = getSdkHost();
+  if (host.beforeSave) {
+    const verdict = await host.beforeSave({
+      id: workflowId,
+      key: state.workflowKey,
+      name: workflowName,
+      status: state.workflowStatus,
+      template,
+    });
+    if (verdict === false) return { ok: false, error: "Save cancelled." };
+    if (typeof verdict === "string") return { ok: false, error: verdict };
+  }
 
   try {
     if (workflowId) {

@@ -27,6 +27,7 @@ import { useExecutionStore } from "../../store/executionStore";
 import { useWorkflowSerializer } from "../../hooks/useWorkflowSerializer";
 import { useExecutionSocket } from "../../hooks/useExecutionSocket";
 import { saveCurrentWorkflow } from "../../lib/saveWorkflow";
+import { getSdkHost } from "../../store/sdkHostStore";
 import * as api from "../../lib/api";
 import { cn } from "../../lib/utils";
 import { DesignPanel } from "../design/DesignPanel";
@@ -121,6 +122,18 @@ export function Toolbar({ onNavigateBack }: ToolbarProps): React.ReactElement {
     const result = await saveCurrentWorkflow();
     if (result.ok) {
       setSaveState("saved");
+      // Emit the full workflow JSON to an embedding host app, if one registered.
+      const host = getSdkHost();
+      if (host.onSave) {
+        const s = useWorkflowStore.getState();
+        host.onSave({
+          id: result.workflowId,
+          key: s.workflowKey,
+          name: s.workflowName,
+          status: s.workflowStatus,
+          template: s.toTemplate(),
+        });
+      }
       setTimeout(() => setSaveState("idle"), 2000);
     } else {
       console.error("Save failed:", result.error);

@@ -16,7 +16,8 @@
 // =============================================================================
 
 export { WorkflowDesigner } from "./WorkflowDesigner";
-export type { WorkflowDesignerProps } from "./WorkflowDesigner";
+export type { WorkflowDesignerProps, WorkflowDesignerTheme } from "./WorkflowDesigner";
+export type { EmittedWorkflow, WorkflowDraft, BeforeSaveHook } from "../../../apps/frontend/src/store/sdkHostStore";
 
 export { WorkflowLogs } from "./WorkflowLogs";
 export type { WorkflowLogsProps } from "./WorkflowLogs";

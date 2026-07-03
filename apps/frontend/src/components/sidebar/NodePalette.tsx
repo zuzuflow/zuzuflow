@@ -11,6 +11,7 @@ import {
 import { listSubworkflows } from "../../lib/api";
 import type { WorkflowListItem, CustomNodeTemplateRecord } from "../../lib/api";
 import { useCustomNodeTemplates } from "../../hooks/useCustomNodeTemplates";
+import { useSdkHostStore, isNodeKindVisible } from "../../store/sdkHostStore";
 import { Input } from "../../components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -235,14 +236,23 @@ export function NodePalette({ isSubworkflow = false }: { isSubworkflow?: boolean
   // Subworkflow-only node kinds — shown only when editing a subworkflow
   const SUBFLOW_ONLY: NodeKind[] = ["subflow_input", "subflow_output"];
 
+  // Host-supplied palette filter (SDK allowedNodeKinds / hiddenNodeKinds).
+  const allowedNodeKinds = useSdkHostStore((s) => s.allowedNodeKinds);
+  const hiddenNodeKinds = useSdkHostStore((s) => s.hiddenNodeKinds);
+  const hostVisible = React.useCallback(
+    (kind: string) => isNodeKindVisible(kind, { allowedNodeKinds, hiddenNodeKinds }),
+    [allowedNodeKinds, hiddenNodeKinds]
+  );
+
   // Build flat searchable list — exclude hidden nodes, but include subflow-only ones when editing a subworkflow
   const allKinds = useMemo(
     () =>
       (Object.keys(nodeRegistry) as NodeKind[]).filter((k) => {
+        if (!hostVisible(k)) return false;
         if (SUBFLOW_ONLY.includes(k)) return isSubworkflow;
         return !nodeRegistry[k].hidden;
       }),
-    [isSubworkflow]
+    [isSubworkflow, hostVisible]
   );
 
   const searchResults = useMemo(() => {
@@ -312,7 +322,7 @@ export function NodePalette({ isSubworkflow = false }: { isSubworkflow?: boolean
                 isSubworkflow
                   ? SUBFLOW_ONLY.filter((k) => nodeRegistry[k].category === id)
                   : []
-              );
+              ).filter((k) => hostVisible(k));
               if (kinds.length === 0) return null;
               return (
                 <CategorySection
